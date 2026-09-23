@@ -7,7 +7,7 @@ import {
   mapStatus,
   normalizeInboundMessage,
   normalizeMessageStatus,
-} from "../server/src/services/webhooks/normalize.js";
+} from "../src/services/webhooks/normalize.js";
 
 const message = {
   from: "15550001111",

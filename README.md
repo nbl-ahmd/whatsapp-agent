@@ -50,8 +50,8 @@ server/                    Express backend (Render)
     controllers/             HTTP request/response mapping
     services/                business logic (whatsapp, webhooks, contacts, ...)
     utils/http.js            response helpers
-prisma/                    schema, migrations, seed (shared, backend-owned)
-tests/                     node:test suite (services + backend HTTP)
+server/prisma/             schema, migrations, seed (backend-owned)
+server/tests/               node:test suite (services + backend HTTP)
 ```
 
 Request flow: `route → controller → service → database / Meta API`.
@@ -60,8 +60,9 @@ Request flow: `route → controller → service → database / Meta API`.
 
 ```bash
 cp .env.example .env                 # NEXT_PUBLIC_API_URL
-cp server/.env.example .env.local    # (or add backend vars to the root .env)
-npm install                          # runs `prisma generate` via postinstall
+cp server/.env.example server/.env   # (or add backend vars to the root .env)
+npm install                          # install frontend dependencies
+npm --prefix server install         # install backend dependencies and generate Prisma
 docker compose up -d                 # PostgreSQL + Redis
 npm run db:migrate
 npm run db:seed
@@ -156,15 +157,16 @@ curl -X POST http://localhost:4000/api/whatsapp/messages \
 - Env: `NEXT_PUBLIC_API_URL=https://api.yourdomain.com`
 - The build does not require the backend or database.
 
-**Backend - Render** (Web Service, root directory: repo root)
+**Backend - Render** (Web Service, root directory: `server`)
 
 - Build: `npm install`
-- Start: `npm start` (runs `node server/src/server.js`)
+- Start: `npm start` (runs `node src/server.js`)
 - Env: all backend variables above; set `FRONTEND_URL=https://app.yourdomain.com`
 - Health check path: `/health`
 
 **Database - PostgreSQL** (Render/Neon/RDS). Only the backend connects to it.
-Run `npm run db:deploy` against the production database to apply migrations.
+Run `npm run db:deploy` from the repository root, or `npm run db:deploy` from
+the `server` directory, against the production database to apply migrations.
 
 ## Meta webhook configuration
 
@@ -178,8 +180,9 @@ Submit the URL from the backend (only the backend responds to the handshake).
 
 ## Database
 
-Prisma schema `prisma/schema.prisma`, migrations `prisma/migrations`, seed
-`prisma/seed.mjs`. Models: `Organization`, `User`, `WhatsAppAccount`,
+Prisma schema `server/prisma/schema.prisma`, migrations
+`server/prisma/migrations`, seed `server/prisma/seed.mjs`. Models: `Organization`,
+`User`, `WhatsAppAccount`,
 `WhatsAppPhoneNumber`, `Contact`, `Conversation`, `Message`, `Automation`,
 `AutomationRun`, `AIAgent`, `Tool`, `Integration`, `WebhookEvent`, `AuditLog`.
 

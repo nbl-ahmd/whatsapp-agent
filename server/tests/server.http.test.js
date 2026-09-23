@@ -1,9 +1,9 @@
 import test, { after } from "node:test";
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
-import { createApp } from "../server/src/app.js";
-import { env } from "../server/src/config/env.js";
-import { prisma } from "../server/src/db/prisma.js";
+import { createApp } from "../src/app.js";
+import { env } from "../src/config/env.js";
+import { prisma } from "../src/db/prisma.js";
 
 const VERIFY_TOKEN = "server-http-verify-token";
 const APP_SECRET = "server-http-app-secret";

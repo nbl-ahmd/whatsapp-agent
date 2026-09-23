@@ -5,7 +5,7 @@ import {
   assertSameTenant,
   tenantData,
   tenantWhere,
-} from "../server/src/lib/tenant.js";
+} from "../src/lib/tenant.js";
 
 test("tenantWhere scopes the where clause to the organization", () => {
   assert.deepEqual(tenantWhere("org_1", { status: "open" }), {

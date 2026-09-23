@@ -11,7 +11,7 @@
  */
 
 function loadEnvFiles() {
-  for (const file of [".env", "server/.env"]) {
+  for (const file of [".env", "../.env", "server/.env"]) {
     try {
       process.loadEnvFile(file);
     } catch {

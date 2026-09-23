@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { decryptSecret, encryptSecret, isEncrypted } from "../server/src/lib/crypto.js";
+import { decryptSecret, encryptSecret, isEncrypted } from "../src/lib/crypto.js";
 
 process.env.ENCRYPTION_KEY ??= "test-encryption-key";
 

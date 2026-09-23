@@ -1,6 +1,6 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
-import { encryptSecret } from "../server/src/lib/crypto.js";
+import { encryptSecret } from "../src/lib/crypto.js";
 
 try {
   process.loadEnvFile();

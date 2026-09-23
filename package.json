@@ -8,27 +8,22 @@
   },
   "scripts": {
     "dev": "next dev",
-    "dev:api": "node --watch server/src/server.js",
+    "dev:api": "npm --prefix server run dev",
     "build": "next build",
-    "start": "node server/src/server.js",
+    "start": "npm --prefix server start",
     "start:web": "next start",
-    "lint": "eslint",
-    "test": "node --test",
-    "postinstall": "prisma generate",
-    "db:generate": "prisma generate",
-    "db:validate": "prisma validate",
-    "db:push": "prisma db push",
-    "db:migrate": "prisma migrate dev",
-    "db:deploy": "prisma migrate deploy",
-    "db:seed": "prisma db seed",
-    "db:studio": "prisma studio"
+    "lint": "eslint src",
+    "test": "npm --prefix server test",
+    "db:generate": "npm --prefix server run db:generate",
+    "db:validate": "npm --prefix server run db:validate",
+    "db:push": "npm --prefix server run db:push",
+    "db:migrate": "npm --prefix server run db:migrate",
+    "db:deploy": "npm --prefix server run db:deploy",
+    "db:seed": "npm --prefix server run db:seed",
+    "db:studio": "npm --prefix server run db:studio"
   },
   "dependencies": {
-    "@prisma/adapter-pg": "^7.10.0",
-    "@prisma/client": "^7.10.0",
-    "express": "^5.2.1",
     "next": "16.3.6",
-    "pg": "^8.23.0",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
@@ -36,7 +31,6 @@
     "@tailwindcss/postcss": "^4",
     "eslint": "^9",
     "eslint-config-next": "16.3.6",
-    "prisma": "^7.10.0",
     "tailwindcss": "^4"
   }
 }

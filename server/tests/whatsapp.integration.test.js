@@ -1,9 +1,9 @@
 import test, { after } from "node:test";
 import assert from "node:assert/strict";
-import { encryptSecret } from "../server/src/lib/crypto.js";
-import { prisma } from "../server/src/db/prisma.js";
-import { sendTextMessage } from "../server/src/services/messages/outbound.js";
-import { handleWhatsAppWebhook } from "../server/src/services/webhooks/process.js";
+import { encryptSecret } from "../src/lib/crypto.js";
+import { prisma } from "../src/db/prisma.js";
+import { sendTextMessage } from "../src/services/messages/outbound.js";
+import { handleWhatsAppWebhook } from "../src/services/webhooks/process.js";
 
 process.env.ENCRYPTION_KEY ??= "test-encryption-key";
 

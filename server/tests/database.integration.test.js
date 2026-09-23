@@ -2,8 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
-import { decryptSecret, isEncrypted } from "../server/src/lib/crypto.js";
-import { tenantWhere } from "../server/src/lib/tenant.js";
+import { decryptSecret, isEncrypted } from "../src/lib/crypto.js";
+import { tenantWhere } from "../src/lib/tenant.js";
 
 try {
   process.loadEnvFile();

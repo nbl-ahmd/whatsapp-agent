@@ -3,7 +3,7 @@ import { defineConfig } from "prisma/config";
 try {
   process.loadEnvFile();
 } catch {
-  // .env is optional (e.g. CI / container environments inject variables directly)
+  // Environment variables may be injected by the deployment platform.
 }
 
 export default defineConfig({

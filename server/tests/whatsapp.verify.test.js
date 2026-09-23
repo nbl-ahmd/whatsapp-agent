@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
-import { verifyChallenge, verifySignature } from "../server/src/services/webhooks/verify.js";
+import { verifyChallenge, verifySignature } from "../src/services/webhooks/verify.js";
 
 function sign(body, secret) {
   return `sha256=${createHmac("sha256", secret).update(body).digest("hex")}`;

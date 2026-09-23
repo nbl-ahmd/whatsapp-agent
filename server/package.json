@@ -1,0 +1,31 @@
+{
+  "name": "whatsapp-agent-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.12.0"
+  },
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "test": "node --test tests/*.test.js",
+    "postinstall": "prisma generate --config prisma.config.mjs",
+    "db:generate": "prisma generate --config prisma.config.mjs",
+    "db:validate": "prisma validate --config prisma.config.mjs",
+    "db:push": "prisma db push --config prisma.config.mjs",
+    "db:migrate": "prisma migrate dev --config prisma.config.mjs",
+    "db:deploy": "prisma migrate deploy --config prisma.config.mjs",
+    "db:seed": "prisma db seed --config prisma.config.mjs",
+    "db:studio": "prisma studio --config prisma.config.mjs"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.10.0",
+    "@prisma/client": "^7.10.0",
+    "express": "^5.2.1",
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "prisma": "^7.10.0"
+  }
+}
