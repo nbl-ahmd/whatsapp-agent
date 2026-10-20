@@ -68,17 +68,21 @@ API is down, start it with `npm run dev:api`. The web app runs with `npm run dev
 
 ---
 
-## 3. Verified state (2026-10-19, design pass)
+## 3. Verified state (2026-10-20, WhatsApp messaging + BYOK)
 
 - `npm run lint` → clean.
 - `npm run build` → succeeds; all 12 routes prerender.
-- `npm test` → 51/51 pass (auth, automation, crypto, database integration, pipeline
-  integration, http, tenant scoping, tools, whatsapp normalize/verify/integration).
+- `npm test` → **58/58** pass (auth, automation, crypto, database integration, messaging,
+  pipeline integration, http, tenant scoping, tools, settings, whatsapp
+  normalize/verify/integration).
+- Manual HTTP E2E on a throwaway org: save credentials → webhook handshake with
+  the stored verify token → test AI → send image and template → document reply.
 - `impeccable detect` → **0 findings** on `/login` at 1280×800 and 390×844, and on
-  `src`.
-- In-page audit of all nine authenticated routes (viewport 1000px): no functional
-  text under 11px, no horizontal overflow, no console errors, **no AA contrast
-  failures**. (The detector cannot scan authenticated URLs; this is the substitute.)
+  `src` (last run 2026-10-19; UI changes since are form-only).
+- In-page audit of all nine authenticated routes (viewport 1000px, 2026-10-19): no
+  functional text under 11px, no horizontal overflow, no console errors, **no AA
+  contrast failures**. (The detector cannot scan authenticated URLs; this is the
+  substitute.)
 
 Working tree is **clean** as of `2817cbc`. Phases 1–5, the frontend and the docs
 are committed in four logical commits (see `CHECKPOINTS.md`, 2026-10-20).
@@ -91,10 +95,10 @@ are committed in four logical commits (see `CHECKPOINTS.md`, 2026-10-20).
 | --- | --- |
 | 0 Project init | done |
 | 1 DB + multi-tenancy | done — org scoping via `server/src/lib/tenant.js`, auth middleware in `server/src/middleware/auth.js`, every query tenant-scoped |
-| 2 WhatsApp Cloud API + webhook | done — verify/signature, persist raw event, idempotent processing, send/receive, simulator provider |
-| 3 Contacts, conversations, messages, inbox | done — services + controllers + the web app pages |
+| 2 WhatsApp Cloud API + webhook | done — verify/signature, persist raw event, idempotent processing, send/receive, simulator provider; outbound text/image/document/template/interactive; inbound media is metadata only |
+| 3 Contacts, conversations, messages, inbox | done — services + controllers + the web app pages; inbox supports image/document attachments |
 | 4 Automation engine | done — JSON workflows, conditions/actions, run history, queue behind `server/src/lib/queue.js` |
-| 5 AI agent + internal tools | done — provider-neutral (`ai/provider.js`: openai-compatible or mock), tool registry with schemas/permissions (`tools/registry.js`), agent loop (`ai/agent.js`) |
+| 5 AI agent + internal tools | done — provider-neutral (`ai/provider.js`: openai-compatible or mock), tool registry with schemas/permissions (`tools/registry.js`), agent loop (`ai/agent.js`); BYOK config per organization |
 | 6 WhatsApp Flows | not started (out of scope until asked) |
 | 7 CRM/ecommerce/MCP adapters | interface only — `services/integrations/index.js`, routes present; **Integrations page shows the adapter contract and connection records, but no provider adapters are registered** |
 | 8 MCP | not started |
@@ -144,13 +148,35 @@ records (mode, unread, ownership, age). It is not stored. Within one level the
 - `src/config/navigation.js` — the primary nav.
 
 Server endpoints (all under `/api`, tenant-scoped): `auth`, `organizations`,
-`dashboard`, `contacts`, `conversations`, `automations`, `ai-agents`, `tools`,
-`integrations`, `logs`, `whatsapp` (incl. `numbers`, `accounts`, `messages`,
-`webhook-status`), and the public `webhooks/whatsapp`.
+`settings` (BYOK credentials + AI test), `dashboard`, `contacts`, `conversations`,
+`automations`, `ai-agents`, `tools`, `integrations`, `logs`, `whatsapp` (incl.
+`numbers`, `accounts`, `templates`, `messages`, `webhook-status`), and the public
+`webhooks/whatsapp`.
 
 ---
 
 ## 7. What recent sessions changed
+
+### 2026-10-20 · WhatsApp messaging + BYOK
+
+Goal: finish the messaging path and stop requiring Meta/AI env configuration.
+
+1. **BYOK credentials.** `OrganizationSettings` (migration
+   `20261020130000_add_organization_settings`) stores Meta access token, app
+   secret, verify token, Graph version/base URL and AI provider/key/base/model.
+   Secrets are AES-GCM encrypted; the API returns only flags and sources.
+   `/api/settings` is admin-write, authenticated-read; `/test-ai` runs one tiny
+   completion. Env remains the fallback.
+2. **Runtime wiring.** Webhook verification and HMAC validation consult org
+   settings and account-level credentials; AI calls and token resolution prefer
+   org settings. No credentials are returned to the browser.
+3. **Messaging.** `services/messages/outbound.js` is now the one dispatcher for
+   text, image, document, template and interactive messages. The inbox can send
+   image/document attachments and renders outbound/inbound media metadata; the
+   WhatsApp page can send image/document/template tests. `GET
+   /api/whatsapp/templates` lists approved templates.
+4. **Security fix.** The browser can no longer write arbitrary
+   `Organization.settings` through `PATCH /api/organizations`.
 
 ### 2026-10-19 · Design pass (craft floor)
 
@@ -211,19 +237,22 @@ Goal: get the frontend green after the visual build, then document it.
 
 ## 8. Next actions (suggested, in order)
 
-1. **Human visual pass on the running app.** The automated pass (contrast, 11px
-   floor, overflow, console, detector) is green, but screenshots were unavailable
-   here, so the operator's own eyes are still owed: sign in as
-   `owner@acme.test`, walk Dashboard → Inbox → Contacts → Automations → AI
-   Agents → WhatsApp → Logs, and confirm the Triage Strip reads as intended at
-   1440px, ~1040px and 390px.
-2. **Refresh `README.md`.** It still says "Phase 2", points at deleted components
+1. **Inbound media proxy.** Media ids arrive and expire; add a tenant-scoped
+   `GET` that resolves the Graph media URL with the stored token so the inbox can
+   render images/documents instead of `[image message]`.
+2. **Template picker.** The API can list approved templates, but the WhatsApp test
+   panel still takes name/language by hand — wire the list into a picker.
+3. **Human visual pass on the running app.** Sign in as `owner@acme.test` and walk
+   Dashboard → Inbox → Contacts → Automations → AI Agents → WhatsApp → Settings →
+   Logs at 1440px, ~1040px and 390px. The new Settings card and inbox attachment
+   row have not been seen by a human yet.
+4. **Refresh `README.md`.** It still says "Phase 2", points at deleted components
    (`SidebarNav`, `BackendStatus`, `config/modules.js`) and describes a
    Vercel/Render split that no longer matches the repo.
-3. **Integrations (phase 7)** ships only the interface — add real CRM/ecommerce
+5. **Integrations (phase 7)** ships only the interface — add real CRM/ecommerce
    adapters only when asked.
-4. Optional: wire a real `AI_PROVIDER=openai` + key and a simulator→Meta flip to
-   exercise the loop end to end, then a Meta test number.
+6. Optional: flip a number from simulator to Meta using the Settings credentials
+   and a Meta test number to exercise the real loop.
 
 Do **not** start phases 6, 8, or 11 without an explicit request.
 
@@ -257,8 +286,14 @@ Do **not** start phases 6, 8, or 11 without an explicit request.
 
 ## 10. Manual configuration still required (none blocking local dev)
 
-- `ENCRYPTION_KEY` and `AUTH_SECRET` for persisted credentials and session tokens.
-- A Postgres `DATABASE_URL` (docker compose provides a local one).
-- For real WhatsApp: `WHATSAPP_*` credentials on a Meta test number.
-- For a real model: `AI_PROVIDER=openai` + `AI_API_KEY` (+ `AI_BASE_URL`, `AI_MODEL`).
+- **`DATABASE_URL`** and **`ENCRYPTION_KEY`** — infrastructure-level env vars.
+  The key encrypts stored credentials, so it must exist before anything is saved.
+- **`AUTH_SECRET`** — recommended explicitly; falls back to `ENCRYPTION_KEY`.
+- Meta credentials — paste access token, app secret and verify token in
+  **Settings → API credentials** (or per number on the WhatsApp page). No Meta
+  env vars are required.
+- AI provider — choose `mock` or `openai` and paste the key/base URL/model in
+  **Settings → API credentials**. Mock needs no key.
 - `REDIS_URL` only if the queue driver is switched from in-process to Redis.
+- Meta webhook subscription itself is still configured in the Meta dashboard;
+  the app cannot subscribe for you.

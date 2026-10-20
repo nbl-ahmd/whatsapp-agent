@@ -5,6 +5,53 @@ Newest first. Each checkpoint records **what changed**, **how it was verified**,
 
 ---
 
+## 2026-10-20 · WhatsApp messaging + BYOK credentials
+
+**Goal.** Finish the WhatsApp messaging path and let an operator configure Meta
+and AI credentials from the app instead of `server/.env`.
+
+**Done.**
+
+- **BYOK settings.** New `OrganizationSettings` model + migration; secrets are
+  AES-GCM encrypted at rest. `GET/PATCH /api/settings` manage Meta (access token,
+  app secret, verify token, Graph version/base URL) and AI (provider, key, base
+  URL, model). `POST /api/settings/test-ai` proves the saved model config with a
+  tiny completion. Admin-only writes; every response is redacted to flags and
+  `settings` / `env` / `none` sources. `ENCRYPTION_KEY` and `DATABASE_URL` stay
+  infrastructure-level env vars.
+- **Runtime wiring.** Webhook GET accepts verify tokens from env, org settings
+  or account records; POST validates the HMAC against env, org or per-account
+  app secrets (chosen from the payload's phone number ids). AI calls and access
+  token resolution now prefer org settings and fall back to env.
+- **Messaging.** One outbound path now sends text, image, document, template and
+  interactive messages; inbox replies and `POST /api/whatsapp/messages` accept
+  the same types. Media is persisted and rendered in the inbox (image preview /
+  document link). The WhatsApp page can send image, document and template test
+  messages. Added `GET /api/whatsapp/templates` to list approved templates.
+- **Security fix.** `PATCH /api/organizations` no longer accepts an arbitrary
+  `settings` blob from the browser.
+- **Tests.** Added `settings.test.js` (encryption at rest, redaction, clearing,
+  webhook candidates) and `messaging.test.js` (media/template persistence and
+  validation). Manual E2E: register org → save credentials → webhook handshake
+  with the stored token → test AI → send image/template → reply with document.
+
+**Verified.**
+
+- `npm --prefix server test` → **58/58** pass (was 51).
+- `npm run lint` → clean.
+- `npm run build` → passes.
+- Manual HTTP E2E script against a throwaway organization → **OK**.
+
+**Left.**
+
+1. Inbound media is stored as metadata only; displaying it needs a tenant-scoped
+   Graph media proxy (media ids expire).
+2. Templates can be sent and listed by API, but the WhatsApp page still takes a
+   template name/language by hand rather than picking from the list.
+3. Human visual pass at 1440 / ~1040 / 390px and the stale `README.md` remain.
+
+---
+
 ## 2026-10-20 · Commit pass
 
 **Goal.** Get the large working tree into git as logical commits, leaving a clean
