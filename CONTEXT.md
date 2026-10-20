@@ -5,7 +5,7 @@ Handoff for a fresh session. Read this first, then `AGENTS.md` (rules + phases),
 file is for *state*: what exists, what is verified, what is next. The history of
 completed work is in `CHECKPOINTS.md`.
 
-Last updated: 2026-10-19.
+Last updated: 2026-10-20.
 
 ---
 
@@ -80,8 +80,8 @@ API is down, start it with `npm run dev:api`. The web app runs with `npm run dev
   text under 11px, no horizontal overflow, no console errors, **no AA contrast
   failures**. (The detector cannot scan authenticated URLs; this is the substitute.)
 
-Working tree is **uncommitted** (last commit is `86946fd`, the seed script; 96
-changed paths). Phases 1–5, the frontend, and the docs are all in the working tree.
+Working tree is **clean** as of `2817cbc`. Phases 1–5, the frontend and the docs
+are committed in four logical commits (see `CHECKPOINTS.md`, 2026-10-20).
 
 ---
 
@@ -96,15 +96,15 @@ changed paths). Phases 1–5, the frontend, and the docs are all in the working 
 | 4 Automation engine | done — JSON workflows, conditions/actions, run history, queue behind `server/src/lib/queue.js` |
 | 5 AI agent + internal tools | done — provider-neutral (`ai/provider.js`: openai-compatible or mock), tool registry with schemas/permissions (`tools/registry.js`), agent loop (`ai/agent.js`) |
 | 6 WhatsApp Flows | not started (out of scope until asked) |
-| 7 CRM/ecommerce/MCP adapters | interface only — `services/integrations/index.js`, routes present; **Integrations page is a placeholder** |
+| 7 CRM/ecommerce/MCP adapters | interface only — `services/integrations/index.js`, routes present; **Integrations page shows the adapter contract and connection records, but no provider adapters are registered** |
 | 8 MCP | not started |
 | 9 Logs/analytics/hardening | partial — logs + audit + dashboard counts exist |
 | 10 Testing/docs/prod prep | partial — tests exist; README + this doc |
 | 11 Embedded Signup | not started (explicitly deferred) |
 
 Frontend pages (`src/app/(dashboard)/`): Dashboard, Inbox, Contacts, Automations,
-AI Agents, WhatsApp, Logs, Settings are implemented; **Integrations** is a
-`ModulePage` stub.
+AI Agents, WhatsApp, Logs, Settings are implemented; **Integrations** renders the
+adapter contract and connection records but has no real providers behind it.
 
 ---
 
@@ -211,16 +211,17 @@ Goal: get the frontend green after the visual build, then document it.
 
 ## 8. Next actions (suggested, in order)
 
-1. **Commit the working tree.** It is large and uncommitted (96 paths). Suggest a
-   few commits (backend phases 1–5; frontend shell + pages; lint refactor; design
-   pass + docs) rather than one blob.
-2. **Human visual pass on the running app.** The automated pass (contrast, 11px
+1. **Human visual pass on the running app.** The automated pass (contrast, 11px
    floor, overflow, console, detector) is green, but screenshots were unavailable
    here, so the operator's own eyes are still owed: sign in as
    `owner@acme.test`, walk Dashboard → Inbox → Contacts → Automations → AI
    Agents → WhatsApp → Logs, and confirm the Triage Strip reads as intended at
    1440px, ~1040px and 390px.
-3. **Integrations page** (phase 7) is a stub — implement only when asked.
+2. **Refresh `README.md`.** It still says "Phase 2", points at deleted components
+   (`SidebarNav`, `BackendStatus`, `config/modules.js`) and describes a
+   Vercel/Render split that no longer matches the repo.
+3. **Integrations (phase 7)** ships only the interface — add real CRM/ecommerce
+   adapters only when asked.
 4. Optional: wire a real `AI_PROVIDER=openai` + key and a simulator→Meta flip to
    exercise the loop end to end, then a Meta test number.
 

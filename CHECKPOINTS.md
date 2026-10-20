@@ -5,6 +5,38 @@ Newest first. Each checkpoint records **what changed**, **how it was verified**,
 
 ---
 
+## 2026-10-20 · Commit pass
+
+**Goal.** Get the large working tree into git as logical commits, leaving a clean
+baseline for the next phase.
+
+**Done.** Four commits on `main`, on top of `86946fd`:
+
+- `230c65c` chore: ignore local tooling state and keep Next.js agent rules — adds
+  `/.codex/` to `.gitignore` (machine-specific hook paths) and commits the
+  `next dev`-managed agent-rules block.
+- `c017d6f` feat(api): multi-tenant backend for phases 1-5 — 67 files: auth/org
+  scoping, WhatsApp + idempotent webhook pipeline, contacts/conversations/messages,
+  automation engine, AI agent + tool registry, provider-mode migration, seed, tests.
+- `2c3a8ea` feat(web): Triage Strip dashboard, auth and operator pages — 61 files:
+  tokens, AppShell, session provider, login, nine pages, shadcn primitives.
+- `2817cbc` docs: product truth, design contract, state and checkpoints.
+
+**Verified.**
+
+- `npm test` → **51/51** pass.
+- `npm run lint` → clean.
+- `git status` → clean.
+
+**Left.**
+
+1. Human visual pass at 1440 / ~1040 / 390px (unchanged).
+2. `README.md` is stale (says Phase 2; references deleted components; describes
+   the old Vercel/Render split).
+3. Phase 7 adapters, then phases 6/8/11 only on request.
+
+---
+
 ## 2026-10-19 · Design pass — craft floor + docs (Triage Strip)
 
 **Goal.** Get the desk running end to end, then improve the UI with the impeccable
