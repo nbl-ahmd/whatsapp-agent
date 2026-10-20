@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Dark Ops Console — Desk</title>
+<style>
+  :root{
+    --bg:#101214; --panel:#17191D; --panel2:#141619; --line:#23262B; --ink:#DDE1E5; --dim:#9BA1A6;
+    --blue:#4C8DFF; --green:#2FBF71; --red:#E5484D;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{width:1440px;height:900px;overflow:hidden;background:var(--bg);color:var(--ink);display:flex;
+    font-family:Inter,"Helvetica Neue",Arial,sans-serif;font-size:13px;line-height:19px}
+  .icons{width:64px;border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 0}
+  .icons .brand{width:30px;height:30px;background:#fff;color:#101214;display:flex;align-items:center;justify-content:center;
+    font-weight:800;font-size:14px;margin-bottom:12px}
+  .icons a{width:40px;height:36px;border-radius:6px;display:flex;align-items:center;justify-content:center;
+    font-size:15px;color:var(--dim);text-decoration:none}
+  .icons a.on{background:#22262B;color:#fff}
+  .icons .foot{margin-top:auto;width:32px;height:32px;border-radius:6px;background:#2A2E34;display:flex;
+    align-items:center;justify-content:center;font-size:11px;color:var(--dim)}
+  main{flex:1;display:flex;flex-direction:column;min-width:0}
+  .top{height:52px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:16px;padding:0 22px}
+  .crumb{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--blue)}
+  .top .spacer{flex:1}
+  .pill{display:flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:5px;padding:6px 10px;
+    font-size:11px;color:var(--dim)}
+  .pill .dot{width:7px;height:7px;border-radius:50%;background:var(--green)}
+  .pill b{color:var(--ink);font-weight:500}
+  .cols{flex:1;display:grid;grid-template-columns:1fr 388px;min-height:0}
+  .left{display:flex;flex-direction:column;border-right:1px solid var(--line);min-width:0}
+  .hero{padding:26px 28px 18px}
+  .hero h1{font-size:44px;line-height:50px;font-weight:800;letter-spacing:-.02em}
+  .hero p{color:var(--dim);margin-top:12px;max-width:560px;font-size:14px;line-height:22px}
+  .actions{display:flex;gap:10px;margin-top:18px}
+  .btn{border:0;border-radius:6px;padding:10px 18px;font-family:inherit;font-size:13px;font-weight:600;
+    background:var(--blue);color:#fff}
+  .btn.ghost{background:transparent;border:1px solid #333840;color:var(--ink)}
+  .cmd{margin-top:18px;background:#0B0D0F;border:1px solid var(--line);border-radius:6px;padding:11px 14px;
+    font-family:"SFMono-Regular",Menlo,monospace;font-size:12px;color:#A9B0B7;display:flex;gap:9px;align-items:center}
+  .cmd .ok{color:var(--green)}
+  .stages{padding:0 28px 20px;border-bottom:1px solid var(--line)}
+  .stages .lbl{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);margin-bottom:12px}
+  .rail-row{display:flex;align-items:center;gap:0}
+  .node{border:1px solid var(--line);border-radius:7px;background:var(--panel);padding:10px 13px;min-width:132px}
+  .node.done{border-color:#2C5F42}
+  .node.here{border-color:var(--blue);box-shadow:0 0 0 3px rgba(76,141,255,.14)}
+  .node b{display:block;font-size:12px;font-weight:600}
+  .node span{font-size:11px;color:var(--dim);font-family:"SFMono-Regular",Menlo,monospace}
+  .node.done b{color:var(--green)}
+  .node.here b{color:var(--blue)}
+  .seg{width:34px;height:2px;background:#2B3037}
+  .lower{flex:1;display:grid;grid-template-columns:1.25fr 1fr;min-height:0}
+  .block{padding:18px 22px;border-right:1px solid var(--line);overflow:hidden}
+  .block:last-child{border-right:0}
+  .block h2{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);margin-bottom:10px}
+  .act{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid #1B1E22;font-size:13px}
+  .act small{color:var(--dim);font-family:"SFMono-Regular",Menlo,monospace;font-size:11px}
+  .convs{display:flex;flex-direction:column}
+  .conv{display:grid;grid-template-columns:1fr 92px 62px;gap:10px;align-items:center;padding:9px 10px;
+    border-bottom:1px solid #1B1E22;border-radius:5px}
+  .conv.on{background:#1B1F24}
+  .conv b{font-weight:500}
+  .conv small{display:block;color:var(--dim);font-size:11px}
+  .tag{font-size:10px;letter-spacing:.12em;text-transform:uppercase;padding:3px 7px;border-radius:999px;
+    border:1px solid var(--line);color:var(--dim);text-align:center}
+  .tag.hu{color:#FFB4B4;border-color:#5A2A2E;background:#2A1618}
+  .tag.ai{color:#8FE0B4;border-color:#24503B;background:#12241B}
+  .right{border-left:1px solid var(--line);background:var(--panel2);display:flex;flex-direction:column;overflow:hidden}
+  .right .sec{padding:16px 20px;border-bottom:1px solid var(--line)}
+  .right .sec h2{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);margin-bottom:9px}
+  .status{display:flex;align-items:center;gap:9px;font-size:13px}
+  .status .dot{width:8px;height:8px;border-radius:50%;background:var(--green)}
+  .status small{display:block;color:var(--dim);font-size:11px}
+  .runs{display:flex;flex-direction:column;gap:1px;background:#1B1E22;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .run{display:grid;grid-template-columns:56px 1fr 62px 52px;gap:8px;background:var(--panel2);padding:9px 11px;
+    font-family:"SFMono-Regular",Menlo,monospace;font-size:11px;color:#A9B0B7}
+  .run .ok{color:var(--green)}.run .bad{color:var(--red)}
+  .meters{display:flex;flex-direction:column;gap:10px}
+  .meter{display:grid;grid-template-columns:74px 1fr 44px;gap:10px;align-items:center;font-size:11px;color:var(--dim)}
+  .track{height:7px;background:#22262B;border-radius:4px;overflow:hidden}
+  .track i{display:block;height:100%;border-radius:4px}
+  .right .feed{flex:1;padding:16px 20px;overflow:hidden}
+  pre{margin:0;background:#0B0D0F;border:1px solid var(--line);border-radius:6px;padding:12px;
+    font-family:"SFMono-Regular",Menlo,monospace;font-size:11px;line-height:17px;color:#A9B0B7;white-space:pre-wrap}
+  .row-btn{display:flex;gap:8px;padding:14px 20px;border-top:1px solid var(--line)}
+  .row-btn button{flex:1}
+</style>
+</head>
+<body>
+  <aside class="icons">
+    <div class="brand">W</div>
+    <a class="on" href="#" title="Inbox">▣</a>
+    <a href="#" title="Dashboard">◔</a>
+    <a href="#" title="Contacts">◍</a>
+    <a href="#" title="Automations">⇄</a>
+    <a href="#" title="Logs">≡</a>
+    <a href="#" title="Settings">⚙</a>
+    <div class="foot">AO</div>
+  </aside>
+
+  <main>
+    <div class="top">
+      <span class="crumb">Inbox · Acme Retail</span>
+      <span class="spacer"></span>
+      <span class="pill"><span class="dot"></span>Number <b>+1 555 010 0001</b> connected</span>
+      <span class="pill">Impact <b>5 need a person</b></span>
+    </div>
+
+    <div class="cols">
+      <div class="left">
+        <div class="hero">
+          <h1>Answer with<br>Total Clarity</h1>
+          <p>One desk for every conversation, every automation run and every handoff, so a waiting customer is never invisible.</p>
+          <div class="actions">
+            <button class="btn">Open the queue</button>
+            <button class="btn ghost">Read the run log</button>
+          </div>
+          <div class="cmd"><span class="ok">●</span> automation refund-requests-to-a-human — fired at 10:42:07 for conversation 1042</div>
+        </div>
+
+        <div class="stages">
+          <p class="lbl">Pipeline · conversation 1042 · Bob Martin</p>
+          <div class="rail-row">
+            <div class="node done"><b>Checkout</b><span>received 10:42</span></div>
+            <i class="seg"></i>
+            <div class="node done"><b>Rule match</b><span>refund keyword</span></div>
+            <i class="seg"></i>
+            <div class="node here"><b>Handoff</b><span>10:42 · open</span></div>
+            <i class="seg"></i>
+            <div class="node"><b>Human reply</b><span>—</span></div>
+            <i class="seg"></i>
+            <div class="node"><b>Resolved</b><span>—</span></div>
+          </div>
+        </div>
+
+        <div class="lower">
+          <div class="block">
+            <h2>Conversations</h2>
+            <div class="convs">
+              <div class="conv on"><div><b>Bob Martin</b><small>I need a refund for order #1042</small></div><span class="tag hu">human</span><small>1h 12m</small></div>
+              <div class="conv"><div><b>Alice Nguyen</b><small>Can you check my order status?</small></div><span class="tag ai">ai</span><small>14m</small></div>
+              <div class="conv"><div><b>Dana New</b><small>Hello, do you have this in blue?</small></div><span class="tag ai">ai</span><small>6m</small></div>
+              <div class="conv"><div><b>Marcus Lee</b><small>[paused by an agent]</small></div><span class="tag">paused</span><small>48m</small></div>
+              <div class="conv"><div><b>Priya Shah</b><small>Thanks, that fixed it!</small></div><span class="tag">closed</span><small>3d</small></div>
+            </div>
+          </div>
+
+          <div class="block">
+            <h2>Latest activity</h2>
+            <div class="act"><span>Rule refund-requests-to-a-human matched</span><small>10:42:07</small></div>
+            <div class="act"><span>Handoff to human succeeded</span><small>10:42:07</small></div>
+            <div class="act"><span>AI replied using get_contact</span><small>10:40:19</small></div>
+            <div class="act"><span>Webhook event persisted</span><small>10:40:18</small></div>
+            <div class="act"><span>Automation run finished</span><small>10:39:52</small></div>
+            <div class="act"><span>Number health check passed</span><small>09:00:00</small></div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="right">
+        <div class="sec">
+          <h2>System status</h2>
+          <div class="status">
+            <span class="dot"></span>
+            <span>All systems operational
+              <small>Webhook verified 12:38:21 · provider simulator</small>
+            </span>
+          </div>
+        </div>
+
+        <div class="sec">
+          <h2>Recent automation runs</h2>
+          <div class="runs">
+            <div class="run"><span>#1042</span><span>refund&nbsp;→&nbsp;human</span><span class="ok">handoff</span><span>2m</span></div>
+            <div class="run"><span>#1041</span><span>welcome&nbsp;contacts</span><span class="ok">sent</span><span>14m</span></div>
+            <div class="run"><span>#1040</span><span>welcome&nbsp;contacts</span><span class="ok">sent</span><span>6m</span></div>
+            <div class="run"><span>#1039</span><span>stock&nbsp;check</span><span class="bad">failed</span><span>48m</span></div>
+            <div class="run"><span>#1038</span><span>close-out</span><span class="ok">tagged</span><span>3d</span></div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <h2>Queue load</h2>
+          <div class="meters">
+            <div class="meter"><span>AI held</span><span class="track"><i style="width:62%;background:#4C8DFF"></i></span><span>62%</span></div>
+            <div class="meter"><span>Human</span><span class="track"><i style="width:41%;background:#2FBF71"></i></span><span>41%</span></div>
+            <div class="meter"><span>Paused</span><span class="track"><i style="width:18%;background:#9B7BFF"></i></span><span>18%</span></div>
+          </div>
+        </div>
+
+        <div class="feed">
+          <h2 style="font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#9BA1A6;margin-bottom:9px">Event feed — 1042</h2>
+          <pre>10:42:07 inbound  refund request
+10:42:07 rule     MATCH
+10:42:07 action   handoff_human  OK
+10:42:08 action   send_message   OK
+10:49:31 inbound  photo attached</pre>
+        </div>
+
+        <div class="row-btn">
+          <button class="btn">Take over</button>
+          <button class="btn ghost">Assign to me</button>
+        </div>
+      </aside>
+    </div>
+  </main>
+</body>
+</html>
+
+<!-- round b332ce64f2c6a6a8c4f04e1946396128 · sketch written for this round -->

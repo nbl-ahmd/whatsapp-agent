@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Card Catalogue — Inbox</title>
+<style>
+  :root{
+    --paper:#F4EFE2; --card:#FBF8EF; --rail:#133F35; --rail-ink:#CBE3D5;
+    --manila:#E3D6B4; --rule:#D6CDB4; --ink:#23231F; --muted:#63615A;
+    --blue:#24457E; --red:#B0351F; --green:#1F5C40;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{width:1440px;height:900px;overflow:hidden;background:var(--paper);color:var(--ink);
+    font-family:"Libre Franklin",Arial,sans-serif;font-size:14px;line-height:20px;display:flex}
+  .rail{width:236px;background:var(--rail);color:var(--rail-ink);padding:22px 18px;display:flex;flex-direction:column}
+  .rail .mark{font-size:16px;font-weight:700;letter-spacing:.01em}
+  .rail .mark small{display:block;font-size:12px;font-weight:400;color:#8FB8A6;letter-spacing:.06em;text-transform:uppercase}
+  .rail nav{margin-top:26px;display:flex;flex-direction:column;gap:2px}
+  .rail nav a{display:flex;justify-content:space-between;color:var(--rail-ink);text-decoration:none;font-size:14px;padding:7px 10px;border-radius:3px}
+  .rail nav a.on{background:#0C2C25;color:#fff;font-weight:600}
+  .rail nav a i{font-style:normal;font-family:"Courier Prime",monospace;font-size:12px;opacity:.75}
+  .rail .foot{margin-top:auto;border-top:1px solid #2A5A4C;padding-top:14px;font-size:12px}
+  .rail .org{font-family:"Courier Prime",monospace;font-size:12px;letter-spacing:.04em;margin-top:4px}
+  main{flex:1;display:flex;flex-direction:column}
+  header{height:76px;border-bottom:1px solid var(--rule);display:flex;align-items:center;gap:20px;padding:0 26px}
+  h1{font-size:28px;line-height:36px;font-weight:700;letter-spacing:-.02em}
+  .count{font-family:"Courier Prime",monospace;font-size:12px;color:var(--muted)}
+  .search{margin-left:auto;width:300px;height:36px;border:1px solid var(--rule);background:var(--card);
+    display:flex;align-items:center;padding:0 12px;color:var(--muted);font-size:13px}
+  .btn{height:36px;padding:0 16px;border:1px solid var(--ink);background:var(--ink);color:var(--paper);
+    font-size:13px;font-weight:600;letter-spacing:.01em}
+  .btn.ghost{background:transparent;color:var(--ink)}
+  .body{flex:1;display:flex;min-height:0}
+  .drawers{width:452px;border-right:1px solid var(--rule);display:flex;flex-direction:column;background:var(--card)}
+  .tabs{display:flex;gap:4px;padding:14px 16px 0;align-items:flex-end}
+  .tab{font-size:12px;text-transform:uppercase;letter-spacing:.07em;padding:8px 12px;background:var(--manila);
+    border:1px solid var(--rule);border-bottom:none;color:#5B5240}
+  .tab.on{background:var(--card);font-weight:700;color:var(--ink);position:relative;top:1px}
+  .tab b{font-family:"Courier Prime",monospace;font-weight:400}
+  .rows{border-top:1px solid var(--rule);overflow:hidden}
+  .row{display:grid;grid-template-columns:52px 1fr 76px;gap:12px;padding:13px 16px;border-bottom:1px solid var(--rule)}
+  .row.sel{background:#EFE7CF;border-left:3px solid var(--green);padding-left:13px}
+  .no{font-family:"Courier Prime",monospace;font-size:12px;color:var(--blue);letter-spacing:.02em}
+  .who{font-weight:600;font-size:14px}
+  .line{color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .stamps{display:flex;gap:3px;margin-top:7px}
+  .st{font-family:"Courier Prime",monospace;font-size:9px;letter-spacing:.08em;padding:2px 4px;
+    border:1px solid currentColor;text-transform:uppercase}
+  .st.q{color:#8A8578}.st.s{color:var(--blue)}.st.d{color:var(--blue)}.st.r{color:var(--green)}
+  .st.h{color:var(--red);border-style:double;border-width:3px}
+  .meta{text-align:right;font-family:"Courier Prime",monospace;font-size:11px;color:var(--muted)}
+  .pill{display:inline-block;margin-top:8px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+    padding:3px 6px;border:1px solid var(--ink)}
+  .pill.ai{background:var(--green);color:#EAF3EC;border-color:var(--green)}
+  .pill.hu{background:var(--red);color:#FCEFE9;border-color:var(--red)}
+  .thread{flex:1;display:flex;flex-direction:column;min-width:0}
+  .thead{height:64px;border-bottom:1px solid var(--rule);display:flex;align-items:center;gap:14px;padding:0 22px}
+  .thead .tag{font-family:"Courier Prime",monospace;font-size:11px;background:var(--manila);border:1px solid var(--rule);padding:3px 7px}
+  .msgs{padding:20px 22px;display:flex;flex-direction:column;gap:14px;flex:1}
+  .msg{max-width:560px;border:1px solid var(--rule);background:var(--card);padding:11px 14px}
+  .msg.out{margin-left:auto;background:#EEF1E3;border-color:#C9D3B4}
+  .msg .h{font-family:"Courier Prime",monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+  .compose{border-top:1px solid var(--rule);padding:14px 22px;display:flex;gap:12px;align-items:center}
+  .compose .box{flex:1;height:44px;border:1px solid var(--rule);background:var(--card);display:flex;align-items:center;
+    padding:0 14px;color:var(--muted)}
+  .record{width:352px;border-left:1px solid var(--rule);background:#EFE7CF;padding:20px;display:flex;flex-direction:column;gap:16px}
+  .record h2{font-size:16px;font-weight:700;letter-spacing:.01em}
+  .card{background:var(--card);border:1px solid var(--rule);padding:12px 14px}
+  .kv{display:flex;justify-content:space-between;font-size:12px;padding:5px 0;border-bottom:1px dotted var(--rule)}
+  .kv:last-child{border-bottom:none}
+  .kv span:last-child{font-family:"Courier Prime",monospace}
+  .stampsheet{display:flex;flex-wrap:wrap;gap:6px}
+  .stampsheet .st{font-size:10px;padding:4px 6px}
+</style>
+</head>
+<body>
+  <aside class="rail">
+    <p class="mark">WhatsApp Agent<small>Operations desk</small></p>
+    <nav>
+      <a href="#">Dashboard <i>—</i></a>
+      <a class="on" href="#">Inbox <i>7</i></a>
+      <a href="#">Contacts <i>128</i></a>
+      <a href="#">Automations <i>4</i></a>
+      <a href="#">AI Agents <i>1</i></a>
+      <a href="#">Integrations <i>2</i></a>
+      <a href="#">WhatsApp <i>1</i></a>
+      <a href="#">Logs <i>—</i></a>
+      <a href="#">Settings <i>—</i></a>
+    </nav>
+    <div class="foot">
+      Signed in as Ada Owner
+      <p class="org">ACME RETAIL · OWNER</p>
+    </div>
+  </aside>
+
+  <main>
+    <header>
+      <div>
+        <h1>Inbox</h1>
+        <p class="count">7 open · 3 need a person · 4 with the AI</p>
+      </div>
+      <div class="search">Search name, number or message</div>
+      <button class="btn ghost">Assign to me</button>
+      <button class="btn">Take over</button>
+    </header>
+
+    <div class="body">
+      <section class="drawers">
+        <div class="tabs">
+          <div class="tab on">All <b>7</b></div>
+          <div class="tab">Unread <b>3</b></div>
+          <div class="tab">AI <b>4</b></div>
+          <div class="tab">Human <b>2</b></div>
+          <div class="tab">Paused <b>1</b></div>
+        </div>
+        <div class="rows">
+          <div class="row sel">
+            <div class="no">1041</div>
+            <div>
+              <p class="who">Alice Nguyen</p>
+              <p class="line">Can you check my order status?</p>
+              <div class="stamps"><span class="st s">sent</span><span class="st d">delivered</span><span class="st r">read</span></div>
+            </div>
+            <div class="meta">14 min ago<span class="pill ai">ai</span></div>
+          </div>
+          <div class="row">
+            <div class="no">1040</div>
+            <div>
+              <p class="who">Bob Martin</p>
+              <p class="line">I need a refund for order #1042</p>
+              <div class="stamps"><span class="st h">handed off</span></div>
+            </div>
+            <div class="meta">1 h ago<span class="pill hu">human</span></div>
+          </div>
+          <div class="row">
+            <div class="no">1039</div>
+            <div>
+              <p class="who">Dana New</p>
+              <p class="line">Hello, do you have this in blue?</p>
+              <div class="stamps"><span class="st q">queued</span><span class="st s">sent</span></div>
+            </div>
+            <div class="meta">2 h ago<span class="pill ai">ai</span></div>
+          </div>
+          <div class="row">
+            <div class="no">1038</div>
+            <div>
+              <p class="who">Priya Shah</p>
+              <p class="line">Thanks, that fixed it!</p>
+              <div class="stamps"><span class="st s">sent</span><span class="st r">read</span></div>
+            </div>
+            <div class="meta">3 d ago<span class="pill">closed</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="thread">
+        <div class="thead">
+          <span class="who">Alice Nguyen</span>
+          <span class="tag">+1 555 011 11</span>
+          <span class="tag">vip · customer</span>
+          <span class="tag">Acme Support · simulator</span>
+        </div>
+        <div class="msgs">
+          <div class="msg out">
+            <p class="h">Outbound · AI agent · 25 h ago</p>
+            <p>Hi Alice! Yes — we ship to Canada in 3-5 business days.</p>
+          </div>
+          <div class="msg">
+            <p class="h">Inbound · 14 min ago</p>
+            <p>Can you check my order status?</p>
+          </div>
+          <div class="msg out">
+            <p class="h">Outbound · AI agent · 60 s later</p>
+            <p>Let me look that up for you — one moment.</p>
+          </div>
+        </div>
+        <div class="compose">
+          <div class="box">Reply as Ada — this takes the conversation from the AI</div>
+          <button class="btn">Send</button>
+        </div>
+      </section>
+
+      <aside class="record">
+        <div>
+          <h2>Record card</h2>
+          <p class="count">Contact · conversation · stamps</p>
+        </div>
+        <div class="card">
+          <div class="kv"><span>Contact</span><span>contact_acme_alice</span></div>
+          <div class="kv"><span>First seen</span><span>26 h ago</span></div>
+          <div class="kv"><span>Messages</span><span>12</span></div>
+          <div class="kv"><span>Conversations</span><span>2</span></div>
+          <div class="kv"><span>Order held</span><span>#1042</span></div>
+        </div>
+        <div>
+          <h2>Stamp trail</h2>
+          <div class="card stampsheet">
+            <span class="st q">received</span><span class="st s">sent</span><span class="st d">delivered</span>
+            <span class="st r">read</span><span class="st h">handed off</span>
+          </div>
+        </div>
+        <div>
+          <h2>Automations that fired</h2>
+          <div class="card">
+            <div class="kv"><span>Welcome new contacts</span><span>skipped</span></div>
+            <div class="kv"><span>Refund requests</span><span>no match</span></div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </main>
+</body>
+</html>
+
+<!-- round b332ce64f2c6a6a8c4f04e1946396128 · sketch written for this round -->

@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Emission Line Rail — Desk</title>
+<style>
+  :root{
+    --rail:#0E0F11; --panel:#15171A; --line:#2A2D31; --ink:#C9CDD2; --dim:#7E848C;
+    --state-ai:#37C978; --state-human:#E04A3F; --state-paused:#E8B33C; --state-closed:#6C4BD8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{width:1440px;height:900px;overflow:hidden;background:var(--rail);color:var(--ink);display:flex;
+    font-family:"Roboto Condensed",Arial,sans-serif;font-size:13px;line-height:18px}
+  .nav{width:184px;border-right:1px solid var(--line);padding:20px 0;display:flex;flex-direction:column}
+  .nav .mark{padding:0 18px;font-size:13px;letter-spacing:.24em;text-transform:uppercase;color:#fff;font-weight:700;line-height:20px}
+  .nav .mark small{display:block;font-size:10px;letter-spacing:.18em;color:var(--dim);font-weight:400}
+  .nav nav{margin-top:24px;display:flex;flex-direction:column}
+  .nav nav a{display:grid;grid-template-columns:1fr auto;gap:8px;padding:11px 18px 11px 16px;color:var(--ink);
+    text-decoration:none;font-size:10px;letter-spacing:.2em;text-transform:uppercase;border-left:2px solid transparent;line-height:15px}
+  .nav nav a small{display:block;font-size:9px;letter-spacing:.14em;color:var(--dim)}
+  .nav nav a.on{border-left-color:var(--state-ai);background:#131619;color:#fff}
+  .nav nav a.on small{color:#9BA3AC}
+  .nav .foot{margin-top:auto;padding:0 18px;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+  main{flex:1;display:flex;flex-direction:column;min-width:0}
+  .rail{height:290px;border-bottom:1px solid var(--line);position:relative;display:flex;align-items:flex-end;gap:3px;padding:0 26px}
+  .rail .tick{flex:1;position:relative;height:100%}
+  .rail .ln{position:absolute;bottom:0;left:50%;width:2px;transform:translateX(-50%)}
+  .ln.ai{background:linear-gradient(to top,rgba(55,201,120,.25),rgba(55,201,120,.95))}
+  .ln.hu{background:linear-gradient(to top,rgba(224,74,63,.25),rgba(224,74,63,1));width:3px}
+  .ln.pa{background:linear-gradient(to top,rgba(232,179,60,.2),rgba(232,179,60,.9))}
+  .ln.cl{background:linear-gradient(to top,rgba(108,75,216,.15),rgba(108,75,216,.7))}
+  .rail .grid{position:absolute;inset:0;background-image:linear-gradient(to bottom,#1B1E22 1px,transparent 1px);background-size:100% 56px}
+  .xaxis{display:flex;justify-content:space-between;padding:7px 26px 0;font-family:"Courier Prime",monospace;font-size:10px;
+    color:var(--dim);letter-spacing:.1em;border-bottom:1px solid var(--line);padding-bottom:11px}
+  .xaxis b{color:#E04A3F;font-weight:400}
+  .readouts{display:flex;gap:1px;background:var(--line);border-bottom:1px solid var(--line)}
+  .ro{flex:1;background:var(--panel);padding:14px 18px}
+  .ro span{display:block;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim)}
+  .ro b{display:block;font-family:"Courier Prime",monospace;font-size:30px;line-height:38px;color:#fff;letter-spacing:-.02em}
+  .ro b i{font-style:normal;font-size:13px;color:var(--dim);letter-spacing:0}
+  .ro.wide{flex:1.6}
+  .spark{display:flex;align-items:flex-end;gap:2px;height:34px;margin-top:4px}
+  .spark i{flex:1;background:#3A3E43;display:block}
+  .lower{flex:1;display:grid;grid-template-columns:1fr 372px;min-height:0}
+  .queue{padding:16px 22px;overflow:hidden}
+  .queue h1{font-size:22px;line-height:26px;font-weight:700;letter-spacing:-.01em}
+  .queue .sub{color:var(--dim);font-size:11px;letter-spacing:.16em;text-transform:uppercase;margin:5px 0 14px}
+  table{width:100%;border-collapse:collapse}
+  th{text-align:left;font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);
+    border-bottom:1px solid var(--line);padding:0 10px 8px}
+  td{border-bottom:1px solid #191C1F;padding:11px 10px;font-size:13px}
+  tr.on td{background:#131619}
+  tr.on td:first-child{box-shadow:inset 3px 0 0 var(--state-human)}
+  .sw{display:inline-block;width:9px;height:9px;margin-right:7px;vertical-align:-1px}
+  td.mono{font-family:"Courier Prime",monospace;font-size:12px;color:#AEB4BA}
+  .st{font-size:10px;letter-spacing:.16em;text-transform:uppercase}
+  .st.hu{color:var(--state-human)}.st.ai{color:var(--state-ai)}.st.pa{color:var(--state-paused)}.st.cl{color:var(--state-closed)}
+  .feed{border-left:1px solid var(--line);background:#121417;padding:16px 18px;display:flex;flex-direction:column;gap:12px;overflow:hidden}
+  .feed h2{font-size:9px;letter-spacing:.22em;text-transform:uppercase;color:var(--dim)}
+  pre{border:1px solid var(--line);padding:11px;font-family:"Courier Prime",monospace;font-size:11px;line-height:17px;
+    color:#B6BCC2;white-space:pre-wrap;margin:0}
+  .kv{display:flex;justify-content:space-between;border-bottom:1px dotted #26292D;padding:7px 0;font-size:11px;color:var(--dim)}
+  .kv b{color:var(--ink);font-weight:400;font-family:"Courier Prime",monospace}
+  button{width:100%;padding:11px;background:var(--state-ai);border:0;color:#08130C;
+    font-family:inherit;font-size:10px;letter-spacing:.2em;text-transform:uppercase;font-weight:700}
+  button.alt{background:transparent;color:var(--ink);border:1px solid #33383D;margin-top:8px}
+</style>
+</head>
+<body>
+  <aside class="nav">
+    <p class="mark">Orionis Desk<small>WhatsApp Agent</small></p>
+    <nav>
+      <a href="#"><span>Overview<small>dashboard</small></span><span>—</span></a>
+      <a class="on" href="#"><span>Spectra<small>inbox</small></span><span>7</span></a>
+      <a href="#"><span>Systems<small>automations</small></span><span>4</span></a>
+      <a href="#"><span>Data Feed<small>logs</small></span><span>—</span></a>
+      <a href="#"><span>Archive<small>contacts</small></span><span>128</span></a>
+      <a href="#"><span>Specifications<small>settings</small></span><span>—</span></a>
+    </nav>
+    <p class="foot">Acme Retail<br>Number 100000000000001</p>
+  </aside>
+
+  <main>
+    <div class="rail">
+      <div class="grid"></div>
+      <div class="tick"><i class="ln cl" style="height:22px"></i></div>
+      <div class="tick"><i class="ln ai" style="height:44px"></i></div>
+      <div class="tick"><i class="ln ai" style="height:58px"></i></div>
+      <div class="tick"><i class="ln ai" style="height:82px"></i></div>
+      <div class="tick"><i class="ln cl" style="height:31px"></i></div>
+      <div class="tick"><i class="ln ai" style="height:96px"></i></div>
+      <div class="tick"><i class="ln pa" style="height:74px"></i></div>
+      <div class="tick"><i class="ln ai" style="height:118px"></i></div>
+      <div class="tick"><i class="ln hu" style="height:161px"></i></div>
+      <div class="tick"><i class="ln hu" style="height:186px"></i></div>
+      <div class="tick"><i class="ln hu" style="height:142px"></i></div>
+      <div class="tick"><i class="ln ai" style="height:104px"></i></div>
+      <div class="tick"><i class="ln ai" style="height:88px"></i></div>
+      <div class="tick"><i class="ln pa" style="height:63px"></i></div>
+      <div class="tick"><i class="ln ai" style="height:71px"></i></div>
+      <div class="tick"><i class="ln ai" style="height:52px"></i></div>
+      <div class="tick"><i class="ln ai" style="height:38px"></i></div>
+      <div class="tick"><i class="ln cl" style="height:27px"></i></div>
+    </div>
+    <div class="xaxis"><span>00:00</span><span>03:00</span><span>06:00</span><span>09:00</span><span><b>10:12 — refund lines appear</b></span><span>12:00</span><span>15:00</span><span>18:00</span><span>now</span></div>
+
+    <div class="readouts">
+      <div class="ro"><span>Lines today</span><b>21</b></div>
+      <div class="ro"><span>Red lines</span><b>5</b></div>
+      <div class="ro"><span>First reply</span><b>34<i> s</i></b></div>
+      <div class="ro"><span>AI resolved</span><b>96<i> %</i></b></div>
+      <div class="ro"><span>Unresolved &gt; 1 h</span><b>2</b></div>
+      <div class="ro wide">
+        <span>Real-time feed — last 30 min</span>
+        <div class="spark">
+          <i style="height:12px"></i><i style="height:19px"></i><i style="height:9px"></i><i style="height:26px"></i>
+          <i style="height:31px"></i><i style="height:17px"></i><i style="height:24px;background:#E04A3F"></i>
+          <i style="height:34px;background:#E04A3F"></i><i style="height:22px;background:#E04A3F"></i>
+          <i style="height:14px"></i><i style="height:20px"></i><i style="height:11px"></i>
+        </div>
+      </div>
+    </div>
+
+    <div class="lower">
+      <section class="queue">
+        <h1>Spectra — 21 conversations, 5 lines are red</h1>
+        <p class="sub">Line colour is state · position on the rail is arrival time · nothing else is coloured</p>
+        <table>
+          <thead>
+            <tr><th>Line</th><th>State</th><th>Landed</th><th>Msgs</th><th>Handoff</th><th>First reply</th></tr>
+          </thead>
+          <tbody>
+            <tr class="on"><td><span class="sw" style="background:#E04A3F"></span>Bob Martin</td><td class="st hu">Human · refund</td><td class="mono">10:42</td><td class="mono">3</td><td class="st hu">1</td><td class="mono">0 s</td></tr>
+            <tr><td><span class="sw" style="background:#37C978"></span>Alice Nguyen</td><td class="st ai">AI · open</td><td class="mono">10:40</td><td class="mono">12</td><td class="mono">0</td><td class="mono">34 s</td></tr>
+            <tr><td><span class="sw" style="background:#37C978"></span>Dana New</td><td class="st ai">AI · new</td><td class="mono">10:48</td><td class="mono">2</td><td class="mono">0</td><td class="mono">12 s</td></tr>
+            <tr><td><span class="sw" style="background:#E8B33C"></span>Marcus Lee</td><td class="st pa">Paused</td><td class="mono">10:06</td><td class="mono">4</td><td class="mono">0</td><td class="mono">29 s</td></tr>
+            <tr><td><span class="sw" style="background:#6C4BD8"></span>Priya Shah</td><td class="st cl">Closed</td><td class="mono">Oct 16</td><td class="mono">9</td><td class="mono">1</td><td class="mono">41 s</td></tr>
+            <tr><td><span class="sw" style="background:#E04A3F"></span>Omar Diaz</td><td class="st hu">AI unsure</td><td class="mono">08:51</td><td class="mono">6</td><td class="mono">0</td><td class="mono">52 s</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <aside class="feed">
+        <h2>Data feed — line 1042</h2>
+        <pre>10:42:07 inbound  "I need a refund for order #1042"
+10:42:07 rule     refund-requests-to-a-human  MATCH
+10:42:07 action   handoff_human               OK
+10:42:08 action   send_message                OK
+10:49:31 inbound  "Here is the photo of the box"</pre>
+        <div>
+          <div class="kv"><span>Rule</span><b>refund-requests-to-a-human</b></div>
+          <div class="kv"><span>Number</span><b>+1 555 010 0001 sim</b></div>
+          <div class="kv"><span>Tags</span><b>refund, awaiting-photo</b></div>
+        </div>
+        <button>Take over the line</button>
+        <button class="alt">Return to the AI</button>
+      </aside>
+    </div>
+  </main>
+</body>
+</html>
+
+<!-- round b332ce64f2c6a6a8c4f04e1946396128 · sketch written for this round -->

@@ -1,0 +1,167 @@
+{
+  "title": "Choose the visual world for the operator desk",
+  "question": "The roll assigned the catalogue-card world for the inbox-first build. Keep it, take an alternate, or re-roll.",
+  "options": [
+    {
+      "id": "assigned",
+      "kind": "assigned",
+      "label": "Catalogue Card & Stamp Trail",
+      "kicker": "THE ROLL",
+      "lineage": "library card catalogues and due-date stamps",
+      "thesis": "Every conversation is a catalogue card, and everything the system did to it is stamped onto the record.",
+      "palette": ["#133F35", "#F4EFE2", "#E3D6B4", "#24457E", "#B0351F", "#23231F"],
+      "materials": ["manila card stock", "buckram rail cloth", "ink stamps", "typewriter record text"],
+      "viewport": "Buckram-green rail on the left; drawer tabs across the queue; card rows carrying a stamp trail; the record card and stamp sheet beside the thread.",
+      "risk": "Archive warmth reads as nostalgia if the tables are not strictly modern in behaviour.",
+      "raised": [
+        {
+          "from": "challenger-grid",
+          "raise": "Coded strip, decoded on demand: the stamp trail is compressed to tick marks in the ruled margin until hover or focus spells the full sentence."
+        },
+        {
+          "from": "challenger-rail",
+          "raise": "Mono-ink data field: the day's traffic is drawn as one rail of lines, and colour appears only where it carries meaning."
+        },
+        {
+          "from": "challenger-atlas",
+          "raise": "A fixed state language sits beneath the work: conversation states are a stable frame that the queue's active item is plotted into, never edits."
+        },
+        {
+          "from": "challenger-folio",
+          "raise": "Fixed-scale comparison: every card row keeps identical field positions and row height, so the eye compares instead of re-reading."
+        },
+        {
+          "from": "challenger-console",
+          "raise": "Connected stage trail: the record draws the path an item took as a connected sequence, not a sentence."
+        }
+      ],
+      "html": ".impeccable/mocks/decision/assigned.html"
+    },
+    {
+      "id": "model-pick",
+      "kind": "pick",
+      "label": "Triage Strip",
+      "kicker": "IMPECCABLE’S PICK",
+      "lineage": "hospital triage boards and acuity tags",
+      "thesis": "The queue is sorted by who needs a person, and the colour of the tag is the promise.",
+      "palette": ["#C2311E", "#C07A0C", "#1D6B4E", "#1F4E8C", "#FBFAF7", "#14181C"],
+      "materials": ["clinical whiteboard", "acuity tags", "handover notes"],
+      "viewport": "Dark top bar, acuity legend, one strip of ranked rows with a colour tag on every row, vitals panel on the right.",
+      "risk": "Also where most runs in this category land: everyone understands a triage board, so it is effective and familiar rather than distinctive.",
+      "html": ".impeccable/mocks/decision/model-pick.html"
+    },
+    {
+      "id": "challenger-grid",
+      "kind": "challenger",
+      "catalogId": "crouwel-grid-specimen",
+      "label": "Grid Specimen Index",
+      "verdict": "competitive",
+      "lineage": "Wim Crouwel grid specimens and modular index sheets",
+      "thesis": "The desk is a published grid: every record occupies a named cell, and the specimen's counts are the operator's dashboard.",
+      "palette": ["#FFFFFF", "#0A0A0A", "#1B46D8", "#8C8C8C", "#F2F5FF"],
+      "materials": ["blueprint grid paper", "stencil display type", "hairline panel frames", "corner tick marks"],
+      "viewport": "Faint blueprint grid under a heavy squarish display word; the queue as a ruled index whose rows carry a count and a plus; system counts strip along the bottom rail.",
+      "risk": "A specimen is an argument about structure, not a place to work; unrelieved stencil display type turns every heading into a poster.",
+      "case": "Fuses sharply: a specimen is literally a table of records with counts, which is the desk's real content, and cell discipline kills the row-drift this table lives with. Loses narrowly on warmth, since the operator hand-writes human summaries into these rows all day.",
+      "kept": "Every element sits in a named cell of a published grid; nothing floats.",
+      "hero": "https://impeccable.style/worlds/cards/crouwel-grid-specimen-hero.webp",
+      "html": ".impeccable/mocks/decision/challenger-grid.html"
+    },
+    {
+      "id": "challenger-rail",
+      "kind": "challenger",
+      "catalogId": "operate-c-emission-line-rail",
+      "label": "Emission Line Rail",
+      "verdict": "competitive",
+      "lineage": "spectrograph rails and calibration sheets",
+      "thesis": "The day's traffic is one calibrated rail of lines; a line's position is when it landed and its colour is its state, and state is the only colour allowed.",
+      "palette": ["#0E0F11", "#2A2D31", "#C9CDD2", "#6C4BD8", "#37C978", "#E8B33C", "#E04A3F"],
+      "materials": ["brushed dark rail", "spectral line ink", "condensed industrial caps", "instrument readout panels"],
+      "viewport": "Two-line instrument nav down the left; a full-width rail of vertical lines with a wavelength-style time axis beneath it; instrument panels of large numerals over a real-time feed sparkline.",
+      "risk": "Instrument darkness is a specialist's room; an operator reading human sentences all day pays for the black in fatigue, and the rail cannot render a long message.",
+      "case": "Fuses cleanly: traffic, timing and state are exactly the desk's three numbers, and a rail is the only honest picture of a queue's shape over a day. Loses on identification, because instrument panels make the product read as monitoring software rather than a place where people talk.",
+      "kept": "One rail as the only time axis; colour reserved for state, never for decoration.",
+      "hero": "https://impeccable.style/worlds/cards/operate-c-emission-line-rail-hero.webp",
+      "html": ".impeccable/mocks/decision/challenger-rail.html"
+    },
+    {
+      "id": "challenger-atlas",
+      "kind": "challenger",
+      "catalogId": "notation-diagram-systems-star-atlas",
+      "label": "Star Atlas & Fix",
+      "verdict": "competitive",
+      "lineage": "star atlases and plotted observation charts",
+      "thesis": "The desk is a chart: the coordinate frame is fixed and published, and each conversation is an object plotted into it with a magnitude that says how loudly it needs a person.",
+      "palette": ["#0B1020", "#E8DCC0", "#D0442B", "#2B3A5C", "#7C8AA3", "#F4EFE2"],
+      "materials": ["midnight atlas ground", "hairline coordinate frames", "magnitude dot keys", "letterspaced small caps"],
+      "viewport": "Atlas-dark ground; a coordinate frame with hour and degree ticks ruling the queue; each record a plotted dot keyed by magnitude; the opened record annotated beside the thread in italic serif with notation rows.",
+      "risk": "Chart notation is a language the operator must be taught, and a magnitude scale risks making a waiting customer feel like an astronomy exercise.",
+      "case": "Fuses sharply: a fixed frame that records are plotted into without editing it is precisely how a queue and its state vocabulary should relate. Loses narrowly on legibility, since hairline chart rules at queue density thin out on the laptop screens this desk actually uses.",
+      "kept": "A fixed coordinate frame that records are plotted into, never edited by them.",
+      "hero": "https://impeccable.style/worlds/cards/notation-diagram-systems-star-atlas-hero.webp",
+      "html": ".impeccable/mocks/decision/challenger-atlas.html"
+    },
+    {
+      "id": "challenger-console",
+      "kind": "challenger",
+      "catalogId": "digital-design-canon-dark-first-developer-console",
+      "label": "Dark Ops Console",
+      "verdict": "declined",
+      "lineage": "dark-first developer consoles",
+      "thesis": "The pipeline is the product: items move through connected stages, and every stage reports its own status inline.",
+      "palette": ["#101214", "#181B1F", "#4C8DFF", "#2FBF71", "#E5484D", "#9BA1A6"],
+      "materials": ["console panels", "monospace numerics", "connected stage rails", "status pills"],
+      "viewport": "Icon rail, dark panels in a three-column grid, a row of connected stage nodes, a right column of recent activity.",
+      "risk": "This is where most runs in this category land, and the darkness makes an ops desk feel like a developer tool while the day's real subject is a person waiting on a reply.",
+      "case": "Fuses poorly: the console's subject is a deployment, and its monospace density optimises for scanning logs, not for writing a careful sentence to a customer.",
+      "kept": "Connected stage rails: the path an item took is drawn as a sequence, not described in a sentence.",
+      "hero": "https://impeccable.style/worlds/cards/digital-design-canon-dark-first-developer-console-hero.webp",
+      "html": ".impeccable/mocks/decision/challenger-console.html"
+    },
+    {
+      "id": "challenger-folio",
+      "kind": "challenger",
+      "catalogId": "editorial-sequence-montage-botanical-folio-season",
+      "label": "Stage Folio",
+      "verdict": "declined",
+      "lineage": "botanical folios following one plant through its seasons",
+      "thesis": "A conversation is a folio of numbered stages, each with a written caption, so its position in the process is never guessed.",
+      "palette": ["#F0E7D6", "#3E5233", "#9A2C22", "#6B6B63", "#C9BFA6"],
+      "materials": ["cream plate ground", "hairline sepia rules", "engraved captions", "numbered stage plates"],
+      "viewport": "Parchment ground, a left index of stages, the queue's active record shown as five numbered plates with season captions beneath.",
+      "risk": "Sequence is not how a queue is read: items are handled out of order, and a quiet plate ground fights live counters that must move every minute.",
+      "case": "Fuses poorly: the world's subject is ordered growth, while a refund waiting since yesterday is the desk's subject, and the folio has no vocabulary for urgency.",
+      "kept": "Numbered stages with a written caption under each, so process position is legible at a glance.",
+      "hero": "https://impeccable.style/worlds/cards/editorial-sequence-montage-botanical-folio-season-hero.webp"
+    },
+    {
+      "id": "challenger-map",
+      "kind": "challenger",
+      "catalogId": "aww2-zoo-gardens-guide-map",
+      "label": "Guide Map & Gates",
+      "verdict": "declined",
+      "lineage": "visitor guide maps with named gates and routes",
+      "thesis": "The account is territory: conversations are stops on a route, and every stop is named with its outcome.",
+      "palette": ["#F6F1E4", "#6FB545", "#F2C13D", "#E8553F", "#2B2B2B", "#7FB3D5"],
+      "materials": ["organic colour blobs", "rounded gate pills", "friendly geometric sans", "wayfinding tiles"],
+      "viewport": "Cream ground with soft colour fields, gate pills marking queue sections, rounded tile list of stops, one tall route panel on the right.",
+      "risk": "The ground is consumer wayfinding, and organic fields make the strict row comparison this table depends on harder to read than a ruled grid.",
+      "case": "Fuses poorly: hospitality is the world's promise and a refund queue is the product's reality; pastel gates cannot mark a handoff that is overdue.",
+      "kept": "A labelled route with gates: territory, stops and outcomes named in one picture.",
+      "hero": "https://impeccable.style/worlds/cards/aww2-zoo-gardens-guide-map-hero.webp"
+    }
+  ],
+  "reroll": { "registers": ["safer", "bolder"] },
+  "buildPath": { "value": "code" },
+  "canon": true,
+  "canonCard": {
+    "kind": "canon",
+    "label": "The category standard, executed impeccably",
+    "thesis": "A neutral product UI: white ground, one blue accent, a clean sidebar and a table.",
+    "palette": ["#FFFFFF", "#111827", "#2563EB", "#6B7280"],
+    "materials": ["clean grid", "system sans", "soft shadows"],
+    "viewport": "Sidebar, header, cards of key numbers, a tidy conversation list.",
+    "risk": "Indistinguishable from the competition by design."
+  },
+  "steer": true
+}

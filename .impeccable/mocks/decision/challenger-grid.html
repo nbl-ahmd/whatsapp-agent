@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Grid Specimen Index — Desk</title>
+<style>
+  :root{
+    --paper:#FFFFFF; --rule:#C9D2E8; --grid:#DCE4F6; --ink:#0A0A0A; --blue:#1B46D8; --dim:#6E7480;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{width:1440px;height:900px;overflow:hidden;background:var(--paper);color:var(--ink);
+    font-family:"Inter",Arial,sans-serif;font-size:13px;line-height:18px;position:relative}
+  .grid-bg{position:absolute;inset:0;background-image:
+    linear-gradient(to right,var(--grid) 1px,transparent 1px),
+    linear-gradient(to bottom,var(--grid) 1px,transparent 1px);
+    background-size:32px 32px}
+  .top{position:relative;height:56px;border-bottom:1px solid var(--rule);display:flex;align-items:center;gap:26px;padding:0 22px}
+  .top .mark{font-size:16px;font-weight:800;letter-spacing:.02em}
+  .top .mark i{font-style:normal;color:var(--blue)}
+  .top nav{display:flex;gap:22px}
+  .top nav a{color:var(--blue);text-decoration:none;font-size:10px;letter-spacing:.2em;text-transform:uppercase;font-weight:600}
+  .top .sp{flex:1}
+  .top .box{border:1px solid var(--ink);padding:7px 14px;font-size:10px;letter-spacing:.16em;text-transform:uppercase;font-weight:600}
+  .top .box.on{background:var(--blue);border-color:var(--blue);color:#fff}
+  .stage{position:relative;display:grid;grid-template-columns:1fr 512px;border-bottom:1px solid var(--rule)}
+  .specimen{padding:24px 22px 18px;border-right:1px solid var(--rule)}
+  h1{font-family:"Oswald","Arial Narrow",sans-serif;font-weight:700;font-size:104px;line-height:92px;
+    letter-spacing:-.01em;text-transform:uppercase}
+  .ruleline{height:2px;background:var(--ink);margin:16px 0 12px}
+  .sub{font-size:15px;line-height:22px;color:#2C2F35;max-width:520px}
+  .actions{display:flex;gap:10px;margin-top:16px}
+  .actions .box{padding:12px 18px;font-size:10px;letter-spacing:.18em;text-transform:uppercase;font-weight:700;border:1px solid var(--blue);color:var(--blue)}
+  .actions .box.fill{background:var(--blue);color:#fff}
+  .corner{display:flex;gap:14px;margin-top:20px;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+  .corner span::before{content:"+ ";color:var(--blue);font-weight:700}
+  .side{display:flex;flex-direction:column}
+  .cell{border-bottom:1px solid var(--rule);padding:16px 20px}
+  .cell .lbl{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--blue);font-weight:700;margin-bottom:10px}
+  .frame{border:1px solid var(--blue);background:#F7F9FF}
+  .frame .head{padding:12px 14px 10px}
+  .frame .head b{font-size:20px;font-weight:800;letter-spacing:-.01em;display:block}
+  .frame .head p{color:var(--dim);font-size:12px;margin-top:3px}
+  .fields{display:flex;padding:12px 14px;gap:22px;border-top:1px solid var(--rule);background:#fff}
+  .fields div b{display:block;font-size:22px;letter-spacing:-.02em}
+  .fields div span{font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim)}
+  .bar{display:flex;justify-content:space-between;align-items:center;padding:9px 14px;border-top:1px solid var(--rule);font-size:10px;letter-spacing:.18em;text-transform:uppercase;font-weight:700}
+  .bar span:last-child{color:var(--blue)}
+  .principles{display:grid;grid-template-columns:1fr 1fr 1fr}
+  .principles div{padding:0 12px;border-right:1px solid var(--rule)}
+  .principles div:last-child{border-right:0}
+  .principles b{display:block;font-size:10px;letter-spacing:.18em;text-transform:uppercase;margin:8px 0 5px}
+  .principles p{font-size:11px;line-height:16px;color:var(--dim)}
+  .mk{width:26px;height:26px;border:1px solid var(--ink);background-image:radial-gradient(var(--ink) 1px,transparent 1px);background-size:5px 5px}
+  .mk.b{background:var(--blue);border-color:var(--blue)}
+  .mk.d{background:linear-gradient(45deg,transparent 46%,var(--ink) 46%,var(--ink) 54%,transparent 54%)}
+  .idxlist a{display:flex;justify-content:space-between;color:var(--ink);text-decoration:none;font-size:11px;
+    padding:6px 0;border-bottom:1px solid #EDF1FA}
+  .idxlist a span:last-child{color:var(--blue);font-weight:700}
+  .counts{position:relative;display:grid;grid-template-columns:1fr 388px;border-top:1px solid var(--rule)}
+  .countbar{display:flex;align-items:center;gap:34px;padding:12px 22px;border-right:1px solid var(--rule)}
+  .countbar div b{font-size:26px;letter-spacing:-.02em;display:block;font-family:"Oswald","Arial Narrow",sans-serif}
+  .countbar div span{font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim)}
+  .built{display:flex;align-items:center;gap:12px;padding:12px 22px}
+  .built .nm{background:var(--ink);color:#fff;width:44px;height:44px;display:flex;align-items:center;justify-content:center;
+    font-weight:800;font-size:16px}
+  .built b{display:block;font-size:15px}
+  .built small{color:var(--dim);font-size:11px}
+  .index{position:relative;padding:14px 22px 0}
+  .index .lbl{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);margin-bottom:8px}
+  .rows{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+  .rec{border:1px solid var(--rule);background:#fff}
+  .rec .n{display:flex;justify-content:space-between;padding:8px 10px;font-size:10px;letter-spacing:.14em;text-transform:uppercase;font-weight:700}
+  .rec .n span:last-child{color:var(--blue)}
+  .rec .b{padding:0 10px 9px;font-size:11px;color:var(--dim);border-top:1px solid #EDF1FA}
+  .rec .b b{display:block;color:var(--ink);font-size:12px;margin-top:7px}
+  .rec.hot{border-color:var(--blue);background:#F7F9FF}
+</style>
+</head>
+<body>
+  <div class="grid-bg" aria-hidden="true"></div>
+
+  <div class="top">
+    <span class="mark">WHATSAPP<i>.</i>AGENT</span>
+    <nav>
+      <a href="#">Inbox</a><a href="#">Contacts</a><a href="#">Automations</a><a href="#">Agents</a><a href="#">Logs</a><a href="#">System</a>
+    </nav>
+    <span class="sp"></span>
+    <span class="box on">Open index</span>
+    <span class="box">Acme Retail</span>
+  </div>
+
+  <div class="stage">
+    <section class="specimen">
+      <h1>Index<br>With<br>Logic</h1>
+      <div class="ruleline"></div>
+      <p class="sub">A published grid for the desk: every conversation takes a named cell, every cell reports its count, and nothing floats outside the frame.</p>
+      <div class="actions">
+        <span class="box fill">Browse the index</span>
+        <span class="box">Read the system</span>
+      </div>
+      <div class="corner">
+        <span>21 conversations</span><span>7 open cells</span><span>5 handoffs awaiting</span>
+      </div>
+    </section>
+
+    <aside class="side">
+      <div class="cell">
+        <p class="lbl">Featured cell — 1042</p>
+        <div class="frame">
+          <div class="head">
+            <b>Bob Martin</b>
+            <p>Refund request · cell opened 10:42 · unresolved since</p>
+          </div>
+          <div class="fields">
+            <div><b>3</b><span>messages</span></div>
+            <div><b>1</b><span>handoff</span></div>
+            <div><b>0</b><span>agent replies</span></div>
+            <div><b>72m</b><span>open for</span></div>
+          </div>
+          <div class="bar"><span>Cell 1042 / human</span><span>Open record +</span></div>
+        </div>
+      </div>
+
+      <div class="cell">
+        <p class="lbl">System principles</p>
+        <div class="principles">
+          <div><span class="mk"></span><b>Structure first</b><p>Every field snaps to a column. Nothing is placed by eye.</p></div>
+          <div><span class="mk b"></span><b>Modular by cell</b><p>The desk is built from counts, cells and rules that repeat.</p></div>
+          <div><span class="mk d"></span><b>Clarity at scale</b><p>Twenty-one records or two thousand read the same way.</p></div>
+        </div>
+      </div>
+
+      <div class="cell">
+        <p class="lbl">Latest release</p>
+        <div class="idxlist">
+          <a href="#"><span>Automation · refunds to a human</span><span>OPEN +</span></a>
+          <a href="#"><span>Provider · simulator number</span><span>SET +</span></a>
+        </div>
+      </div>
+
+      <div class="cell">
+        <p class="lbl">Docs</p>
+        <div class="idxlist">
+          <a href="#"><span>Webhook setup</span><span>↗</span></a>
+          <a href="#"><span>Tool permissions</span><span>↗</span></a>
+          <a href="#"><span>Tenant isolation</span><span>↗</span></a>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="counts">
+    <div class="countbar">
+      <div><b>21</b><span>conversations</span></div>
+      <div><b>7</b><span>open cells</span></div>
+      <div><b>5</b><span>handoffs</span></div>
+      <div><b>4</b><span>automations</span></div>
+      <div><b>34s</b><span>first reply</span></div>
+      <div><b>2h 06m</b><span>oldest open</span></div>
+    </div>
+    <div class="built">
+      <span class="nm">AO</span>
+      <span><b>Ada Owner</b><small>Acme Retail · owner · number 100000000000001</small></span>
+    </div>
+  </div>
+
+  <div class="index">
+    <p class="lbl">Browse the index — view all cells &nbsp;———&gt;</p>
+    <div class="rows">
+      <div class="rec hot"><div class="n"><span>1042</span><span>+</span></div><div class="b">human<b>Bob Martin</b></div></div>
+      <div class="rec"><div class="n"><span>1041</span><span>+</span></div><div class="b">ai<b>Alice Nguyen</b></div></div>
+      <div class="rec"><div class="n"><span>1040</span><span>+</span></div><div class="b">ai<b>Dana New</b></div></div>
+      <div class="rec"><div class="n"><span>1039</span><span>+</span></div><div class="b">paused<b>Marcus Lee</b></div></div>
+      <div class="rec"><div class="n"><span>1038</span><span>+</span></div><div class="b">closed<b>Priya Shah</b></div></div>
+      <div class="rec"><div class="n"><span>1037</span><span>+</span></div><div class="b">ai unsure<b>Omar Diaz</b></div></div>
+    </div>
+  </div>
+</body>
+</html>
+
+<!-- round b332ce64f2c6a6a8c4f04e1946396128 · sketch written for this round -->

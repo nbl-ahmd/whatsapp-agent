@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Triage Strip — Queue</title>
+<style>
+  :root{
+    --ground:#FBFAF7; --white:#fff; --ink:#14181C; --muted:#5D666F; --rule:#DDE2E5;
+    --acuity-red:#C2311E; --acuity-amber:#C07A0C; --acuity-green:#1D6B4E; --acuity-blue:#1F4E8C;
+    --board:#EDF0EC;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{width:1440px;height:900px;overflow:hidden;background:var(--ground);color:var(--ink);
+    font-family:"Archivo",Arial,sans-serif;font-size:14px;line-height:20px}
+  .bar{height:64px;background:var(--ink);color:#fff;display:flex;align-items:center;gap:4px;padding:0 24px}
+  .bar .mark{font-size:15px;font-weight:700;margin-right:26px}
+  .bar a{color:#D5DBE1;text-decoration:none;font-size:13px;padding:8px 12px;border-radius:2px}
+  .bar a.on{background:#fff;color:var(--ink);font-weight:700}
+  .bar .who{margin-left:auto;font-size:12px;color:#9AA6B1}
+  .head{background:var(--board);border-bottom:1px solid var(--rule);padding:18px 24px 0}
+  .head h1{font-size:28px;line-height:34px;font-weight:800;letter-spacing:-.02em}
+  .head .sub{color:var(--muted);font-size:13px;margin-top:2px}
+  .legend{display:flex;gap:18px;margin:14px 0 0;padding-bottom:12px}
+  .legend p{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted)}
+  .dot{width:10px;height:10px;border-radius:50%}
+  .d1{background:var(--acuity-red)}.d2{background:var(--acuity-amber)}.d3{background:var(--acuity-green)}.d4{background:var(--acuity-blue)}
+  .grid{display:grid;grid-template-columns:1fr 396px;gap:0;height:calc(900px - 64px - 118px)}
+  .strip{border-right:1px solid var(--rule);overflow:hidden}
+  .srow{display:grid;grid-template-columns:6px 58px 1fr 150px 96px;align-items:center;gap:14px;
+    padding:14px 24px;border-bottom:1px solid var(--rule);background:var(--white)}
+  .tag{width:6px;align-self:stretch;border-radius:1px}
+  .t1{background:var(--acuity-red)}.t2{background:var(--acuity-amber)}.t3{background:var(--acuity-green)}.t4{background:var(--acuity-blue)}
+  .srow.sel{outline:2px solid var(--ink);outline-offset:-2px}
+  .slot{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  .name{font-weight:700;font-size:15px}
+  .last{color:var(--muted);font-size:13px}
+  .age{font-size:12px;color:var(--muted)}
+  .st{font-size:11px;text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+  .st.awarded{color:var(--acuity-red)}.st.watch{color:var(--acuity-amber)}.st.stable{color:var(--acuity-green)}
+  .side{background:var(--board);padding:20px}
+  .panel{background:var(--white);border:1px solid var(--rule);margin-bottom:14px}
+  .panel .pt{padding:12px 14px;border-bottom:1px solid var(--rule);font-weight:700;font-size:14px;display:flex;justify-content:space-between}
+  .panel .pb{padding:12px 14px;font-size:13px;color:var(--muted)}
+  .vitals{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--rule)}
+  .vitals div{background:var(--white);padding:12px 14px}
+  .vitals b{display:block;font-size:21px;font-weight:800;letter-spacing:-.02em}
+  .vitals span{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+  button{font-family:inherit;font-size:13px;font-weight:700;padding:10px 14px;border:1px solid var(--ink);
+    background:var(--ink);color:#fff;width:100%}
+  button.alt{background:#fff;color:var(--ink);margin-top:8px}
+</style>
+</head>
+<body>
+  <div class="bar">
+    <span class="mark">WhatsApp Agent</span>
+    <a href="#">Dashboard</a><a class="on" href="#">Inbox</a><a href="#">Contacts</a>
+    <a href="#">Automations</a><a href="#">AI Agents</a><a href="#">WhatsApp</a><a href="#">Logs</a>
+    <span class="who">Acme Retail · Ada Owner</span>
+  </div>
+
+  <div class="head">
+    <h1>Queue — sorted by who needs a person</h1>
+    <p class="sub">21 conversations today · 5 waiting on a teammate · average first reply 34 s</p>
+    <div class="legend">
+      <p><span class="dot d1"></span> Immediate — handed off or angry</p>
+      <p><span class="dot d2"></span> Soon — AI unsure, no reply yet</p>
+      <p><span class="dot d3"></span> Stable — AI handling it</p>
+      <p><span class="dot d4"></span> Closed today</p>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="strip">
+      <div class="srow sel">
+        <div class="tag t1"></div><div class="slot">10:42</div>
+        <div><p class="name">Bob Martin</p><p class="last">I need a refund for order #1042</p></div>
+        <div class="age">waiting 1 h 12 m</div><div class="st awarded">Handed off</div>
+      </div>
+      <div class="srow">
+        <div class="tag t2"></div><div class="slot">10:31</div>
+        <div><p class="name">Dana New</p><p class="last">Hello, do you have this in blue?</p></div>
+        <div class="age">waiting 6 m</div><div class="st watch">AI replying</div>
+      </div>
+      <div class="srow">
+        <div class="tag t3"></div><div class="slot">09:58</div>
+        <div><p class="name">Alice Nguyen</p><p class="last">Can you check my order status?</p></div>
+        <div class="age">AI answered 14 m ago</div><div class="st stable">AI handled</div>
+      </div>
+      <div class="srow">
+        <div class="tag t3"></div><div class="slot">09:12</div>
+        <div><p class="name">Marcus Lee</p><p class="last">What time do you close on Friday?</p></div>
+        <div class="age">AI answered 48 m ago</div><div class="st stable">AI handled</div>
+      </div>
+      <div class="srow">
+        <div class="tag t4"></div><div class="slot">Yesterday</div>
+        <div><p class="name">Priya Shah</p><p class="last">Thanks, that fixed it!</p></div>
+        <div class="age">closed 3 d ago</div><div class="st stable">Resolved</div>
+      </div>
+    </div>
+
+    <div class="side">
+      <div class="panel">
+        <div class="pt"><span>Bob Martin</span><span style="font-weight:400;color:#5D666F">+1 555 022 22</span></div>
+        <div class="pb">Refund on order #1042 · handed off by the automation “Refund requests to a human”</div>
+      </div>
+      <div class="panel">
+        <div class="pt">Today on this desk</div>
+        <div class="vitals">
+          <div><b>21</b><span>conversations</span></div>
+          <div><b>34 s</b><span>first reply</span></div>
+          <div><b>5</b><span>handoffs</span></div>
+          <div><b>96%</b><span>AI resolved</span></div>
+        </div>
+        <div class="pb">Refund volume is up from 2 to 5 today; the spike starts at 10:12.</div>
+      </div>
+      <div class="panel">
+        <div class="pt">Handover note</div>
+        <div class="pb">Bob was asked to send a photo of the damaged item. No photo yet — check before refunding.</div>
+      </div>
+      <button>Take over this conversation</button>
+      <button class="alt">Reply and keep AI on</button>
+    </div>
+  </div>
+</body>
+</html>
+
+<!-- round b332ce64f2c6a6a8c4f04e1946396128 · sketch written for this round -->

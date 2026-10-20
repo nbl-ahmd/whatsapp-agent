@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Star Atlas — Queue</title>
+<style>
+  :root{
+    --sky:#0B1020; --deep:#131A33; --cream:#E8DCC0; --rust:#D0442B;
+    --grid:#2B3A5C; --dim:#7C8AA3; --paper:#F4EFE2;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{width:1440px;height:900px;overflow:hidden;background:var(--sky);color:var(--cream);
+    font-family:"Libre Franklin",Arial,sans-serif;font-size:13px;line-height:19px;display:flex}
+  .legend{margin-left:auto;font-size:11px;color:var(--dim);letter-spacing:.04em;align-self:center}
+  .nav{width:196px;border-right:1px solid #1E2745;padding:20px 0 20px 18px;display:flex;flex-direction:column}
+  .mark{font-size:15px;font-weight:700;letter-spacing:.01em;color:var(--cream)}
+  .mark small{display:block;font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--rust);margin-top:2px}
+  .nav nav{margin-top:26px;display:flex;flex-direction:column;gap:1px}
+  .nav nav a{display:flex;gap:9px;align-items:baseline;color:var(--cream);text-decoration:none;
+    font-size:10px;letter-spacing:.2em;text-transform:uppercase;padding:9px 0 9px 10px;border-left:1px solid #26304F}
+  .nav nav a.on{border-left:2px solid var(--rust);color:#fff}
+  .nav nav a i{font-style:normal;font-family:"Courier Prime",monospace;letter-spacing:0;color:var(--dim)}
+  .nav nav a.on i{color:var(--cream)}
+  .nav .foot{margin-top:auto;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+  main{flex:1;display:flex;flex-direction:column;min-width:0}
+  .head{height:70px;border-bottom:1px solid #1E2745;display:flex;align-items:center;gap:18px;padding:0 26px}
+  .head h1{font-family:"Playfair Display",Georgia,serif;font-style:italic;font-size:30px;line-height:34px;font-weight:600}
+  .head .no{font-family:"Courier Prime",monospace;font-size:11px;color:var(--rust);letter-spacing:.1em}
+  .head .fields{display:flex;gap:14px;font-size:11px;color:var(--dim);letter-spacing:.04em;margin-left:auto}
+  .chart{flex:1;display:flex;min-height:0}
+  .frame{flex:1;position:relative;padding:22px 26px 26px 52px;border-right:1px solid #1E2745}
+  .axis-y{position:absolute;left:18px;top:22px;bottom:60px;display:flex;flex-direction:column;justify-content:space-between;
+    font-family:"Courier Prime",monospace;font-size:10px;color:var(--dim)}
+  .field{position:relative;height:100%;border:1px solid var(--grid)}
+  .field::before{content:"";position:absolute;inset:0;
+    background-image:linear-gradient(to right,#1E2745 1px,transparent 1px),linear-gradient(to bottom,#1E2745 1px,transparent 1px);
+    background-size:56px 56px}
+  .hours{display:flex;justify-content:space-between;font-family:"Courier Prime",monospace;font-size:10px;color:var(--dim);
+    letter-spacing:.08em;padding:8px 2px 0}
+  .plot{position:absolute;inset:0}
+  .obj{position:absolute;font-size:11px;color:var(--cream);white-space:nowrap}
+  .dot{display:block;border-radius:50%;background:var(--cream)}
+  .obj small{display:block;font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);margin-top:2px}
+  .obj.hot .dot{background:var(--rust);box-shadow:0 0 0 3px rgba(208,68,43,.25)}
+  .obj.hot{color:var(--rust)}
+  .obj.hot small{color:#C97A66}
+  .link{position:absolute;border-top:1px dashed #4A5C86;transform-origin:0 0}
+  .rings{position:absolute;left:56%;top:44%;width:230px;height:230px;border:1px solid #26304F;border-radius:50%}
+  .rings::after{content:"";position:absolute;inset:34px;border:1px solid #26304F;border-radius:50%}
+  .fix{width:352px;background:var(--deep);padding:22px 20px;display:flex;flex-direction:column;gap:18px}
+  .sec{font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--dim);margin-bottom:9px;
+    border-bottom:1px solid #26304F;padding-bottom:6px}
+  .card{border:1px solid #26304F;padding:12px 14px;background:#101731}
+  .card .name{font-family:"Playfair Display",Georgia,serif;font-style:italic;font-size:21px;color:var(--cream)}
+  .card .co{font-family:"Courier Prime",monospace;font-size:10px;color:var(--rust);letter-spacing:.1em;margin-top:3px}
+  .note{font-size:12px;color:#C6C0AE;margin-top:7px;line-height:18px}
+  .kv{display:flex;justify-content:space-between;font-size:11px;padding:6px 0;border-bottom:1px dotted #26304F;color:var(--dim)}
+  .kv b{font-family:"Courier Prime",monospace;font-weight:400;color:var(--cream)}
+  .mag{display:flex;flex-direction:column;gap:6px;font-size:11px;color:var(--dim)}
+  .mag div{display:flex;align-items:center;gap:8px}
+  .mag .dot{width:9px;height:9px}
+  .mag .d2{width:7px;height:7px}.mag .d3{width:5px;height:5px}
+  button{width:100%;border:1px solid var(--rust);background:transparent;color:var(--cream);padding:11px;
+    font-family:inherit;font-size:10px;letter-spacing:.2em;text-transform:uppercase}
+  button.fill{background:var(--rust);border-color:var(--rust);color:#F7EFE6}
+</style>
+</head>
+<body>
+  <aside class="nav">
+    <p class="mark">WhatsApp Agent<small>Sideris desk</small></p>
+    <nav>
+      <a href="#">Dashboard <i>—</i></a>
+      <a class="on" href="#">Inbox <i>7</i></a>
+      <a href="#">Contacts <i>128</i></a>
+      <a href="#">Automations <i>4</i></a>
+      <a href="#">AI Agents <i>1</i></a>
+      <a href="#">Integrations <i>2</i></a>
+      <a href="#">WhatsApp <i>1</i></a>
+      <a href="#">Logs <i>—</i></a>
+      <a href="#">Settings <i>—</i></a>
+    </nav>
+    <p class="foot">Acme Retail<br>Owner · Ada</p>
+  </aside>
+
+  <main>
+    <div class="head">
+      <div>
+        <p class="no">OBSERVATION 2026-10-19 · 10:54Z</p>
+        <h1>The Inbox Is Your Sky</h1>
+      </div>
+      <span class="legend">Chart. Hand off. Remember.</span>
+      <div class="fields"><span>7 open</span><span>3 with a person</span><span>4 with the AI</span></div>
+    </div>
+
+    <div class="chart">
+      <section class="frame">
+        <div class="axis-y"><span>0.0</span><span>2.5</span><span>5.0</span><span>7.0</span></div>
+        <div class="field">
+          <div class="rings"></div>
+          <svg class="plot" viewBox="0 0 900 620" preserveAspectRatio="none" aria-hidden="true">
+            <g stroke="#4A5C86" stroke-width="1" stroke-dasharray="3 3" fill="none">
+              <path d="M612 96 L470 372 L648 508"/>
+            </g>
+          </svg>
+          <div class="obj hot" style="left:66%;top:12%"><span class="dot" style="width:13px;height:13px"></span>Bob Martin<small>1h 12m · handoff</small></div>
+          <div class="obj" style="left:44%;top:34%"><span class="dot" style="width:8px;height:8px"></span>Alice Nguyen<small>14m · ai · open</small></div>
+          <div class="obj" style="left:70%;top:64%"><span class="dot" style="width:6px;height:6px"></span>Dana New<small>6m · ai · new</small></div>
+          <div class="obj" style="left:26%;top:20%"><span class="dot" style="width:5px;height:5px"></span>Marcus Lee<small>48m · ai · open</small></div>
+          <div class="obj" style="left:14%;top:74%"><span class="dot" style="width:4px;height:4px"></span>Priya Shah<small>3d · closed</small></div>
+          <div class="obj hot" style="left:84%;top:44%"><span class="dot" style="width:12px;height:12px"></span>Omar Diaz<small>2h · ai unsure</small></div>
+        </div>
+        <div class="hours"><span>00:00</span><span>03:00</span><span>06:00</span><span>09:00</span><span>12:00</span><span>15:00</span><span>18:00</span><span>now</span></div>
+      </section>
+
+      <aside class="fix">
+        <div>
+          <p class="sec">Fix — record 1042</p>
+          <div class="card">
+            <p class="name">Bob Martin</p>
+            <p class="co">RA 1h 12m · DEC REFUND · MAG 6.8</p>
+            <p class="note">Order #1042 · photo of the box attached. Plotted at handoff, still unresolved.</p>
+          </div>
+        </div>
+
+        <div>
+          <p class="sec">Notation</p>
+          <div class="kv"><span>Contact</span><b>contact_acme_bob</b></div>
+          <div class="kv"><span>Number</span><b>+1 555 022 22</b></div>
+          <div class="kv"><span>Rule fired</span><b>refund &rarr; human</b></div>
+          <div class="kv"><span>Tags</span><b>refund, awaiting-photo</b></div>
+          <div class="kv"><span>Magnitude</span><b>6.8 / 7.0</b></div>
+        </div>
+
+        <div>
+          <p class="sec">Magnitude key</p>
+          <div class="mag">
+            <div><span class="dot" style="width:11px;height:11px;background:#D0442B"></span>6 – 7 · a person is overdue</div>
+            <div><span class="dot d2"></span>4 – 5 · waiting on us</div>
+            <div><span class="dot d3"></span>2 – 3 · AI holds it well</div>
+            <div><span class="dot d3" style="opacity:.5"></span>0 – 1 · quiet, logged</div>
+          </div>
+        </div>
+
+        <button class="fill">Record the fix</button>
+        <button>Plot next object</button>
+      </aside>
+    </div>
+  </main>
+</body>
+</html>
+
+<!-- round b332ce64f2c6a6a8c4f04e1946396128 · sketch written for this round -->

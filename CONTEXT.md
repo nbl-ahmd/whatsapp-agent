@@ -1,0 +1,263 @@
+# CONTEXT — resume notes
+
+Handoff for a fresh session. Read this first, then `AGENTS.md` (rules + phases),
+`PRODUCT.md` (product truth), and `DESIGN.md` (the locked visual direction). This
+file is for *state*: what exists, what is verified, what is next. The history of
+completed work is in `CHECKPOINTS.md`.
+
+Last updated: 2026-10-19.
+
+---
+
+## 1. What this is
+
+Multi-tenant WhatsApp automation SaaS on the Meta WhatsApp Cloud API. An AI agent
+answers inbound messages and acts through explicit tools; automations react to
+normalized events; a human operator can take over any conversation from the inbox.
+
+Monorepo, two apps:
+
+- **Frontend** — Next.js 16 (App Router, Turbopack), React 19, Tailwind v4, at the
+  repo root (`src/`). Never talks to the database or to Meta.
+- **Backend** — standalone Express 5 + Prisma 7 + PostgreSQL in `server/`. Owns
+  all Meta calls, the webhook, the queue, the automation engine and the AI agent.
+
+Core flow: Meta webhook → persist raw → resolve tenant (from the token/phone
+number, never the client) → normalize → contact/conversation/message → queue →
+automation + AI (tools) → single outbound messaging service → Meta Graph API.
+
+---
+
+## 2. Resume commands
+
+```bash
+# Infra (Postgres + Redis)
+docker compose up -d
+
+# install (if node_modules missing)
+npm install && npm --prefix server install
+
+# database
+npm run db:migrate       # or db:push for a scratch DB
+npm run db:seed          # demo orgs + data
+
+# run (two terminals)
+npm run dev              # Next.js on http://localhost:3000
+npm run dev:api          # Express API on http://localhost:4000
+
+# verify before moving on
+npm run lint             # eslint src  (must be clean)
+npm run build            # next build  (must pass)
+npm test                 # node --test, server/tests  (currently 51 pass)
+```
+
+**Demo logins** (from `server/prisma/seed.mjs`; password is the same for all):
+
+- `owner@acme.test` / `password123` (org `org_acme`)
+- `agent@acme.test` / `password123`
+- `owner@globex.test` / `password123` (org `org_globex`)
+
+Nothing needs Meta credentials or an AI key to run: a phone number can be
+`providerMode = "simulator"`, and the AI provider is `mock` (deterministic) when
+`AI_API_KEY` is unset.
+
+**This environment (2026-10-19).** Docker is **not** installed here, so the
+`docker compose up -d` step is not available. Postgres was already reachable and
+the API was already listening on `http://localhost:4000` (`/health` → ok). If the
+API is down, start it with `npm run dev:api`. The web app runs with `npm run dev`.
+
+---
+
+## 3. Verified state (2026-10-19, design pass)
+
+- `npm run lint` → clean.
+- `npm run build` → succeeds; all 12 routes prerender.
+- `npm test` → 51/51 pass (auth, automation, crypto, database integration, pipeline
+  integration, http, tenant scoping, tools, whatsapp normalize/verify/integration).
+- `impeccable detect` → **0 findings** on `/login` at 1280×800 and 390×844, and on
+  `src`.
+- In-page audit of all nine authenticated routes (viewport 1000px): no functional
+  text under 11px, no horizontal overflow, no console errors, **no AA contrast
+  failures**. (The detector cannot scan authenticated URLs; this is the substitute.)
+
+Working tree is **uncommitted** (last commit is `86946fd`, the seed script; 96
+changed paths). Phases 1–5, the frontend, and the docs are all in the working tree.
+
+---
+
+## 4. Phases — where things stand
+
+| Phase | Status |
+| --- | --- |
+| 0 Project init | done |
+| 1 DB + multi-tenancy | done — org scoping via `server/src/lib/tenant.js`, auth middleware in `server/src/middleware/auth.js`, every query tenant-scoped |
+| 2 WhatsApp Cloud API + webhook | done — verify/signature, persist raw event, idempotent processing, send/receive, simulator provider |
+| 3 Contacts, conversations, messages, inbox | done — services + controllers + the web app pages |
+| 4 Automation engine | done — JSON workflows, conditions/actions, run history, queue behind `server/src/lib/queue.js` |
+| 5 AI agent + internal tools | done — provider-neutral (`ai/provider.js`: openai-compatible or mock), tool registry with schemas/permissions (`tools/registry.js`), agent loop (`ai/agent.js`) |
+| 6 WhatsApp Flows | not started (out of scope until asked) |
+| 7 CRM/ecommerce/MCP adapters | interface only — `services/integrations/index.js`, routes present; **Integrations page is a placeholder** |
+| 8 MCP | not started |
+| 9 Logs/analytics/hardening | partial — logs + audit + dashboard counts exist |
+| 10 Testing/docs/prod prep | partial — tests exist; README + this doc |
+| 11 Embedded Signup | not started (explicitly deferred) |
+
+Frontend pages (`src/app/(dashboard)/`): Dashboard, Inbox, Contacts, Automations,
+AI Agents, WhatsApp, Logs, Settings are implemented; **Integrations** is a
+`ModulePage` stub.
+
+---
+
+## 5. The visual direction is locked
+
+**Triage Strip** (hospital triage boards and acuity tags). Full contract and tokens
+in `DESIGN.md`; the brief is `.impeccable/surfaces/`. The docket and mocks are in
+`.impeccable/` (`decision-payload.json`, `mocks/decision/`).
+
+Do not restyle the app to another world — the world is chosen and the shell, tokens
+and every page are already cut from it. Small, in-world refinements are welcome;
+a re-skin is not.
+
+Two token values moved for AA contrast in the 2026-10-19 pass and must not be
+reverted: `--watch` `#9A5B00` (was `#C07A0C`) and `--ink-3` `#656C73` (was
+`#6C737A`). Two house rules also came out of it: **functional text is ≥11px**, and
+**no kicker/eyebrow above a heading**. All three are recorded in `DESIGN.md`.
+
+The "acuity" ranking is derived in `src/lib/acuity.js` from what the backend already
+records (mode, unread, ownership, age). It is not stored. Within one level the
+**longest-waiting promise ranks first**.
+
+---
+
+## 6. Frontend map
+
+- `src/lib/api.js` — bearer-token client, unwraps `{ data }`, 401 clears the session.
+- `src/lib/session.js` — the one place the browser token lives (never an org id).
+- `src/components/AuthProvider.js` — session context via `useSyncExternalStore`,
+  `/api/auth/me` verification, sign in / register / sign out / change password.
+- `src/lib/useResource.js` — read hook; loading is derived from whether the held
+  data belongs to the current path.
+- `src/lib/acuity.js` — acuity levels, ranking, counts, short ages.
+- `src/components/ui.js` — Tag, AcuityTag, AcuityBlock, Ruler, PageHead, Field,
+  Empty, Banner, Stat, Panel, Skeleton.
+- `src/app/globals.css` — every visual token and component style for the world.
+- `src/config/navigation.js` — the primary nav.
+
+Server endpoints (all under `/api`, tenant-scoped): `auth`, `organizations`,
+`dashboard`, `contacts`, `conversations`, `automations`, `ai-agents`, `tools`,
+`integrations`, `logs`, `whatsapp` (incl. `numbers`, `accounts`, `messages`,
+`webhook-status`), and the public `webhooks/whatsapp`.
+
+---
+
+## 7. What recent sessions changed
+
+### 2026-10-19 · Design pass (craft floor)
+
+Goal: run the desk and improve the UI with impeccable, without re-skinning.
+
+1. **Detector fixes.** 10px captions and an 8px acuity stamp raised to the 11px
+   floor; `--watch` darkened for white-label contrast; placeholders use `--ink-3`;
+   the banner's 3px left rule replaced by a solid tone square (the `side-tab`
+   anti-pattern), plus the outbound bubble and login error.
+2. **Authenticated contrast audit.** `--ink-3` failed on the tinted `--paper-2`
+   (table heads, muted notes) → darkened to `#656C73`. Hard-coded grays in
+   `.tag[data-level="4"]` / `.acuity-block` now read `var(--ink-3)`.
+3. **Eyebrows removed** from `PageHead` and every page + login (craft-floor ban);
+   the dashboard date moved under the `h1`.
+4. **Ranking bug fixed.** `rankConversations` said oldest-first in copy but sorted
+   newest-first; now longest-waiting-first within a level.
+5. **Browser surfaces** themed (selection, caret, thin scrollbars); a 1px press
+   step on buttons.
+6. `DESIGN.md` updated; `CHECKPOINTS.md` added.
+
+### Earlier · Frontend green + design contract
+
+Goal: get the frontend green after the visual build, then document it.
+
+1. **Cleared all 12 lint errors.** The React 19 / `eslint-plugin-react-hooks`
+   `set-state-in-effect` rule was failing on the "seed state after data arrives"
+   pattern. Replaced it everywhere with derived state / event handlers:
+   - `AuthProvider.js` — session now read through `useSyncExternalStore`; the
+     `/me` verdict is keyed by token, set only inside promise callbacks.
+   - `useResource.js` — rewrote to derive `loading`/`data`/`error` from the path
+     the held state was fetched for.
+   - `AppShell.js` — the mobile sheet closes on link select and sign-out instead
+     of on a pathname effect.
+   - `contacts`, `inbox`, `automations`, `whatsapp`, `settings`, `ai-agents`
+     pages — first-row auto-selection, detail/thread resets, default number and
+     the org-name field are now derived, not effect-seeded.
+   - `logs` — escaped an apostrophe in JSX copy.
+2. **Fixed a real bug found during the refactor:** on the AI Agents page the
+   "New agent" button was immediately re-filled by the auto-select effect (the
+   blank draft had no `id`). The form now follows an explicit draft, so a new
+   agent stays blank.
+3. **Added `DESIGN.md`** — the direction contract, tokens, typography, the acuity
+   language, motion, accessibility, and provenance for every shipping asset.
+4. Verified: lint clean, `next build` passes, `npm test` 51/51.
+
+### Behaviour deltas from the refactor (intentional, worth knowing)
+
+- `useResource` returns `data: null` while a *new* path is loading (before it kept
+  the previous data). Background `refreshMs` re-fetches still keep the last data.
+  Pages already treat `data ?? []`, so lists show the skeleton then fill.
+- The inbox thread shows its loading skeleton whenever the loaded thread does not
+  belong to the active conversation (`messagesFor !== activeId`), rather than via a
+  `threadState` flag that is now removed.
+- Contacts detail now guards on `detail.id === activeId`, so a stale record can't
+  linger for a selection that changed.
+
+---
+
+## 8. Next actions (suggested, in order)
+
+1. **Commit the working tree.** It is large and uncommitted (96 paths). Suggest a
+   few commits (backend phases 1–5; frontend shell + pages; lint refactor; design
+   pass + docs) rather than one blob.
+2. **Human visual pass on the running app.** The automated pass (contrast, 11px
+   floor, overflow, console, detector) is green, but screenshots were unavailable
+   here, so the operator's own eyes are still owed: sign in as
+   `owner@acme.test`, walk Dashboard → Inbox → Contacts → Automations → AI
+   Agents → WhatsApp → Logs, and confirm the Triage Strip reads as intended at
+   1440px, ~1040px and 390px.
+3. **Integrations page** (phase 7) is a stub — implement only when asked.
+4. Optional: wire a real `AI_PROVIDER=openai` + key and a simulator→Meta flip to
+   exercise the loop end to end, then a Meta test number.
+
+Do **not** start phases 6, 8, or 11 without an explicit request.
+
+---
+
+## 9. Conventions and gotchas
+
+- **Tenancy:** never accept an organization id from the browser. Identity comes
+  from the bearer token; the backend resolves the org. Frontend sends no org id.
+- **Secrets:** Meta tokens and integration secrets are encrypted at rest in the
+  backend and never returned to the browser. No secret is ever `NEXT_PUBLIC_*`.
+- **Providers are seams:** Meta lives in `services/whatsapp/*`; the AI provider in
+  `services/ai/provider.js`; CRM/ecommerce/MCP behind `services/integrations`.
+  Keep new provider code inside these.
+- **One responder per conversation:** `ai` / `human` / `paused`. Human takeover
+  must stop the AI immediately.
+- **Webhooks stay fast and idempotent:** persist → queue → return; repeated Meta
+  deliveries must not duplicate work (idempotency by external event/message id).
+- **React 19 lint is strict.** Avoid `setState` synchronously in an effect body —
+  derive instead, or set state inside a promise/event callback, or use
+  `useSyncExternalStore`.
+- **Fonts** are self-hosted woff2 (Barlow / Barlow Condensed, OFL); no font CDN.
+- `.env` is gitignored; `server/.env.example` and root `.env.example` list every
+  variable. `ENCRYPTION_KEY` and `AUTH_SECRET` must be set (generate with
+  `openssl rand -hex 32`).
+- `.impeccable/` holds the design docket, surface briefs and reference mocks
+  (provenance for `DESIGN.md`); keep it. `.gemini/` is the impeccable CLI's
+  project install and is gitignored.
+
+---
+
+## 10. Manual configuration still required (none blocking local dev)
+
+- `ENCRYPTION_KEY` and `AUTH_SECRET` for persisted credentials and session tokens.
+- A Postgres `DATABASE_URL` (docker compose provides a local one).
+- For real WhatsApp: `WHATSAPP_*` credentials on a Meta test number.
+- For a real model: `AI_PROVIDER=openai` + `AI_API_KEY` (+ `AI_BASE_URL`, `AI_MODEL`).
+- `REDIS_URL` only if the queue driver is switched from in-process to Redis.
