@@ -38,6 +38,10 @@ yarn-error.log*
 # vercel
 .vercel
 
+# tooling (impeccable skills installed into a provider folder; not product code)
+/.gemini/
+/.codex/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
