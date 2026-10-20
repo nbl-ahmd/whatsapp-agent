@@ -5,10 +5,12 @@ import { PrismaClient } from "@prisma/client";
 import { decryptSecret, isEncrypted } from "../src/lib/crypto.js";
 import { tenantWhere } from "../src/lib/tenant.js";
 
-try {
-  process.loadEnvFile();
-} catch {
-  // environment variables may be injected directly
+for (const file of [".env", "../.env", "server/.env"]) {
+  try {
+    process.loadEnvFile(file);
+  } catch {
+    // environment variables may be injected directly
+  }
 }
 
 const { DATABASE_URL } = process.env;

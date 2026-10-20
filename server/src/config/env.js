@@ -42,6 +42,11 @@ export const env = {
 
   logLevel: optional("LOG_LEVEL", "info"),
 
+  // Session tokens. Falls back to ENCRYPTION_KEY so a local .env only needs one
+  // generated secret; both must be set explicitly in production.
+  authSecret: optional("AUTH_SECRET", optional("ENCRYPTION_KEY")),
+  authTokenTtlHours: Number(optional("AUTH_TOKEN_TTL_HOURS", "168")),
+
   databaseUrl: optional("DATABASE_URL"),
   redisUrl: optional("REDIS_URL"),
   encryptionKey: optional("ENCRYPTION_KEY"),
@@ -58,6 +63,9 @@ export const env = {
   },
 
   ai: {
+    // "openai" (OpenAI-compatible /chat/completions) or "mock" (deterministic
+    // local provider used when no API key is configured).
+    provider: optional("AI_PROVIDER") || (optional("AI_API_KEY") ? "openai" : "mock"),
     apiKey: optional("AI_API_KEY"),
     baseUrl: optional("AI_BASE_URL", "https://api.openai.com/v1"),
     model: optional("AI_MODEL", "gpt-4o-mini"),

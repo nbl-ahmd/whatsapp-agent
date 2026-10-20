@@ -195,6 +195,9 @@ model WhatsAppPhoneNumber {
   verifiedName       String?
   qualityRating      String?
   status             PhoneNumberStatus @default(PENDING)
+  // Outbound provider for this number: "meta" (Graph API) or "simulator"
+  // (local dev: outbound is recorded but never leaves the machine).
+  providerMode       String            @default("meta")
   metadata           Json?
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt

@@ -11,6 +11,7 @@ import {
   updateMessageStatusByExternalId,
 } from "../messages/service.js";
 import { resolvePhoneNumberContext } from "../whatsapp/credentials.js";
+import { enqueueInboundEvent } from "../workers/index.js";
 import {
   deriveEventType,
   extractMessageChanges,
@@ -35,29 +36,11 @@ export function hashWebhookPayload(rawBody) {
 
 export async function handleWhatsAppWebhook({ rawBody, payload, headers }) {
   const externalEventId = hashWebhookPayload(rawBody);
-
-  let event;
-  try {
-    event = await prisma.webhookEvent.create({
-      data: {
-        source: "whatsapp",
-        externalEventId,
-        eventType: deriveEventType(payload),
-        payload,
-        headers: headers ?? undefined,
-      },
-    });
-  } catch (error) {
-    if (isUniqueConstraintError(error)) {
-      logger.info("Duplicate webhook delivery ignored", { externalEventId });
-      return { duplicate: true, processed: 0, errors: [] };
-    }
-    throw error;
-  }
-
   const changes = extractMessageChanges(payload);
-  const errors = [];
-  let processed = 0;
+
+  // Resolve the tenant before persisting, so the raw event is never stored
+  // without its organization once a phone number is known.
+  const resolved = [];
   let organizationId = null;
 
   for (const change of changes) {
@@ -71,7 +54,33 @@ export async function handleWhatsAppWebhook({ rawBody, payload, headers }) {
     }
 
     organizationId ??= phoneNumber.organizationId;
+    resolved.push({ change, phoneNumber });
+  }
 
+  let event;
+  try {
+    event = await prisma.webhookEvent.create({
+      data: {
+        source: "whatsapp",
+        externalEventId,
+        eventType: deriveEventType(payload),
+        organizationId,
+        payload,
+        headers: headers ?? undefined,
+      },
+    });
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      logger.info("Duplicate webhook delivery ignored", { externalEventId });
+      return { duplicate: true, processed: 0, errors: [] };
+    }
+    throw error;
+  }
+
+  const errors = [];
+  let processed = 0;
+
+  for (const { change, phoneNumber } of resolved) {
     try {
       processed += await processChange({ phoneNumber, value: change.value });
     } catch (error) {
@@ -159,6 +168,18 @@ export async function processInboundMessage({ phoneNumber, message, contacts }) 
     preview: normalized.text,
     at: normalized.timestamp,
     incrementUnread: true,
+  });
+
+  // Webhooks must return fast: automations and AI run in the background queue.
+  await enqueueInboundEvent({
+    organizationId,
+    type: "MESSAGE_RECEIVED",
+    conversationId: conversation.id,
+    contactId: contact.id,
+    messageId: persisted.id,
+    text: normalized.text,
+    tags: contact.tags ?? [],
+    conversationCreated: created,
   });
 
   return { message: persisted, conversation, contact, conversationCreated: created };

@@ -1,410 +1,516 @@
+// Seed script: two demo organizations with a usable message history.
+//
+// Everything here is idempotent (upsert by a stable id), so `npm run db:seed`
+// can be re-run at any time. The Acme phone number runs in "simulator" provider
+// mode, which means the whole pipeline works locally without Meta credentials.
+//
+// Demo logins (password is the same for every seeded user): password123
+
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
 import { encryptSecret } from "../src/lib/crypto.js";
 
-try {
-  process.loadEnvFile();
-} catch {
-  // environment variables may be injected directly
+// Same lookup order as src/config/env.js so the seed works from the repo root
+// and from the server directory.
+for (const file of [".env", "../.env", "server/.env"]) {
+  try {
+    process.loadEnvFile(file);
+  } catch {
+    // Environment variables may be injected by the platform.
+  }
 }
 
-if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL is required to run the seed.");
+const { DATABASE_URL, ENCRYPTION_KEY } = process.env;
+
+if (!DATABASE_URL) {
+  console.error("DATABASE_URL is not set. Copy .env.example to .env first.");
+  process.exit(1);
 }
 
-const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
-const prisma = new PrismaClient({ adapter });
+if (!ENCRYPTION_KEY) {
+  console.error("ENCRYPTION_KEY is not set. Generate one with `openssl rand -hex 32`.");
+  process.exit(1);
+}
+
+const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: DATABASE_URL }) });
+
+const DEMO_PASSWORD = "password123";
+
+// scrypt hash of DEMO_PASSWORD, computed once so the seed stays fast.
+const {
+  hashPassword,
+  verifyPassword,
+} = await import("../src/lib/password.js");
+const { bootstrapOrganizationDefaults } = await import("../src/services/organizations/service.js");
+
+const passwordHash = await hashPassword(DEMO_PASSWORD);
+if (!(await verifyPassword(DEMO_PASSWORD, passwordHash))) {
+  throw new Error("Password hashing is not working");
+}
+
+const hoursAgo = (hours) => new Date(Date.now() - hours * 60 * 60 * 1000);
+
+async function upsertOrganization({ id, name, slug, plan }) {
+  return prisma.organization.upsert({
+    where: { id },
+    update: { name, slug, plan },
+    create: { id, name, slug, plan },
+  });
+}
+
+async function upsertUser({ id, organizationId, email, name, role }) {
+  return prisma.user.upsert({
+    where: { id },
+    update: { name, role, passwordHash, isActive: true },
+    create: { id, organizationId, email, name, role, passwordHash, isActive: true },
+  });
+}
+
+async function upsertAccount({ id, organizationId, name, wabaId, status, accessToken = null }) {
+  return prisma.whatsAppAccount.upsert({
+    where: { id },
+    update: { name, wabaId, status, accessToken: accessToken ? encryptSecret(accessToken) : null },
+    create: {
+      id,
+      organizationId,
+      name,
+      wabaId,
+      status,
+      accessToken: accessToken ? encryptSecret(accessToken) : null,
+    },
+  });
+}
+
+async function upsertPhoneNumber({
+  id,
+  organizationId,
+  whatsappAccountId,
+  phoneNumberId,
+  displayPhoneNumber,
+  verifiedName,
+  status,
+  providerMode,
+  qualityRating = null,
+}) {
+  return prisma.whatsAppPhoneNumber.upsert({
+    where: { id },
+    update: { displayPhoneNumber, verifiedName, status, providerMode, qualityRating },
+    create: {
+      id,
+      organizationId,
+      whatsappAccountId,
+      phoneNumberId,
+      displayPhoneNumber,
+      verifiedName,
+      status,
+      providerMode,
+      qualityRating,
+    },
+  });
+}
+
+async function upsertContact({ id, organizationId, waId, name, email = null, locale = "en", tags = [] }) {
+  return prisma.contact.upsert({
+    where: { id },
+    update: { name, tags, lastSeenAt: new Date() },
+    create: {
+      id,
+      organizationId,
+      waId,
+      phone: waId,
+      name,
+      profileName: name,
+      email,
+      locale,
+      tags,
+      lastSeenAt: new Date(),
+    },
+  });
+}
+
+async function upsertConversation({
+  id,
+  organizationId,
+  contactId,
+  phoneNumberId,
+  mode,
+  status,
+  assignedUserId = null,
+  unreadCount = 0,
+  lastMessageAt,
+  lastMessagePreview,
+  variables = null,
+}) {
+  return prisma.conversation.upsert({
+    where: { id },
+    update: { mode, status, unreadCount, lastMessageAt, lastMessagePreview, assignedUserId },
+    create: {
+      id,
+      organizationId,
+      contactId,
+      phoneNumberId,
+      mode,
+      status,
+      assignedUserId,
+      unreadCount,
+      lastMessageAt,
+      lastMessagePreview,
+      variables,
+    },
+  });
+}
+
+async function upsertMessage({
+  id,
+  organizationId,
+  conversationId,
+  contactId,
+  phoneNumberId,
+  direction,
+  status,
+  text,
+  externalMessageId,
+  timestamp,
+}) {
+  return prisma.message.upsert({
+    where: { externalMessageId },
+    update: { status, text },
+    create: {
+      id,
+      organizationId,
+      conversationId,
+      contactId,
+      phoneNumberId,
+      direction,
+      type: "text",
+      status,
+      text,
+      externalMessageId,
+      timestamp,
+    },
+  });
+}
 
 async function seedAcme() {
-  const organizationId = "org_acme";
-
-  await prisma.organization.upsert({
-    where: { id: organizationId },
-    update: { name: "Acme Corp", slug: "acme", plan: "pro" },
-    create: {
-      id: organizationId,
-      name: "Acme Corp",
-      slug: "acme",
-      plan: "pro",
-      settings: { timezone: "UTC" },
+  // Remove workflows created by earlier seed versions so re-seeding is a clean
+  // state (runs cascade with their automation).
+  await prisma.automation.deleteMany({
+    where: {
+      organizationId: "org_acme",
+      name: { in: ["Welcome new contact"] },
     },
   });
 
-  await prisma.user.upsert({
-    where: { id: "user_acme_owner" },
-    update: {},
-    create: {
-      id: "user_acme_owner",
-      organizationId,
-      email: "owner@acme.test",
-      name: "Acme Owner",
-      role: "OWNER",
-    },
+  const organization = await upsertOrganization({
+    id: "org_acme",
+    name: "Acme Retail",
+    slug: "acme",
+    plan: "pro",
   });
 
-  await prisma.user.upsert({
-    where: { id: "user_acme_agent" },
-    update: {},
-    create: {
-      id: "user_acme_agent",
-      organizationId,
-      email: "agent@acme.test",
-      name: "Acme Agent",
-      role: "AGENT",
-    },
+  const owner = await upsertUser({
+    id: "user_acme_owner",
+    organizationId: organization.id,
+    email: "owner@acme.test",
+    name: "Ada Owner",
+    role: "OWNER",
+  });
+  const agent = await upsertUser({
+    id: "user_acme_agent",
+    organizationId: organization.id,
+    email: "agent@acme.test",
+    name: "Sam Agent",
+    role: "AGENT",
   });
 
-  await prisma.whatsAppAccount.upsert({
-    where: { id: "wa_acme" },
-    update: {},
-    create: {
-      id: "wa_acme",
-      organizationId,
-      name: "Acme WhatsApp",
-      wabaId: "WABA_ACME_001",
-      accessToken: encryptSecret("acme-test-access-token"),
-      appSecret: encryptSecret("acme-test-app-secret"),
-      webhookVerifyToken: encryptSecret("acme-test-verify-token"),
-      status: "ACTIVE",
-    },
+  const account = await upsertAccount({
+    id: "wa_acme",
+    organizationId: organization.id,
+    name: "Acme Cloud API",
+    wabaId: "WABA_ACME",
+    status: "ACTIVE",
+    accessToken: "acme-test-access-token",
   });
 
-  await prisma.whatsAppPhoneNumber.upsert({
-    where: { id: "pn_acme" },
-    update: {},
-    create: {
-      id: "pn_acme",
-      organizationId,
-      whatsappAccountId: "wa_acme",
-      phoneNumberId: "100000000000001",
-      displayPhoneNumber: "+15550000001",
-      verifiedName: "Acme Support",
-      qualityRating: "GREEN",
-      status: "CONNECTED",
-    },
+  const number = await upsertPhoneNumber({
+    id: "pn_acme",
+    organizationId: organization.id,
+    whatsappAccountId: account.id,
+    phoneNumberId: "100000000000001",
+    displayPhoneNumber: "+1 555 010 0001",
+    verifiedName: "Acme Support",
+    status: "CONNECTED",
+    providerMode: "simulator",
+    qualityRating: "GREEN",
   });
 
-  const contacts = [
-    { id: "contact_acme_alice", waId: "15551230001", name: "Alice Johnson", tags: ["customer"] },
-    { id: "contact_acme_bob", waId: "15551230002", name: "Bob Smith", tags: ["lead", "vip"] },
-  ];
-  for (const contact of contacts) {
-    await prisma.contact.upsert({
-      where: { id: contact.id },
-      update: {},
-      create: { organizationId, ...contact },
-    });
-  }
-
-  await prisma.conversation.upsert({
-    where: { id: "conv_acme_alice" },
-    update: {},
-    create: {
-      id: "conv_acme_alice",
-      organizationId,
-      contactId: "contact_acme_alice",
-      phoneNumberId: "pn_acme",
-      mode: "ai",
-      status: "open",
-      lastMessageAt: new Date("2026-01-01T10:05:00Z"),
-      lastMessagePreview: "When are you open?",
-    },
+  const alice = await upsertContact({
+    id: "contact_acme_alice",
+    organizationId: organization.id,
+    waId: "15550001111",
+    name: "Alice Nguyen",
+    email: "alice@example.com",
+    tags: ["customer", "vip"],
+  });
+  const bob = await upsertContact({
+    id: "contact_acme_bob",
+    organizationId: organization.id,
+    waId: "15550002222",
+    name: "Bob Martin",
+    tags: ["lead"],
+  });
+  const priya = await upsertContact({
+    id: "contact_acme_priya",
+    organizationId: organization.id,
+    waId: "15550003333",
+    name: "Priya Shah",
+    tags: ["customer"],
   });
 
-  await prisma.conversation.upsert({
-    where: { id: "conv_acme_bob" },
-    update: {},
-    create: {
-      id: "conv_acme_bob",
-      organizationId,
-      contactId: "contact_acme_bob",
-      phoneNumberId: "pn_acme",
-      assignedUserId: "user_acme_agent",
-      mode: "human",
-      status: "open",
-      lastMessageAt: new Date("2026-01-01T11:05:00Z"),
-      lastMessagePreview: "I'd like to speak to a human.",
-    },
+  const aliceThread = await upsertConversation({
+    id: "conv_acme_alice",
+    organizationId: organization.id,
+    contactId: alice.id,
+    phoneNumberId: number.id,
+    mode: "ai",
+    status: "open",
+    unreadCount: 2,
+    lastMessageAt: hoursAgo(0.2),
+    lastMessagePreview: "Can you check my order status?",
   });
 
-  const messages = [
-    {
-      id: "msg_acme_1",
-      externalMessageId: "wamid.acme.seed.1",
-      conversationId: "conv_acme_alice",
-      contactId: "contact_acme_alice",
+  await Promise.all([
+    upsertMessage({
+      id: "msg_acme_alice_1",
+      organizationId: organization.id,
+      conversationId: aliceThread.id,
+      contactId: alice.id,
+      phoneNumberId: number.id,
       direction: "inbound",
-      type: "text",
       status: "received",
-      text: "Hi, I have a question.",
-      timestamp: new Date("2026-01-01T10:00:00Z"),
-    },
-    {
-      id: "msg_acme_2",
-      externalMessageId: "wamid.acme.seed.2",
-      conversationId: "conv_acme_alice",
-      contactId: "contact_acme_alice",
+      text: "Hi! Do you ship to Canada?",
+      externalMessageId: "wamid.seed.acme.1",
+      timestamp: hoursAgo(26),
+    }),
+    upsertMessage({
+      id: "msg_acme_alice_2",
+      organizationId: organization.id,
+      conversationId: aliceThread.id,
+      contactId: alice.id,
+      phoneNumberId: number.id,
       direction: "outbound",
-      type: "text",
-      status: "delivered",
-      text: "Hello! How can I help?",
-      timestamp: new Date("2026-01-01T10:01:00Z"),
-    },
-    {
-      id: "msg_acme_3",
-      externalMessageId: "wamid.acme.seed.3",
-      conversationId: "conv_acme_bob",
-      contactId: "contact_acme_bob",
+      status: "read",
+      text: "Hi Alice! Yes - we ship to Canada in 3-5 business days.",
+      externalMessageId: "wamid.seed.acme.2",
+      timestamp: hoursAgo(25),
+    }),
+    upsertMessage({
+      id: "msg_acme_alice_3",
+      organizationId: organization.id,
+      conversationId: aliceThread.id,
+      contactId: alice.id,
+      phoneNumberId: number.id,
       direction: "inbound",
-      type: "text",
       status: "received",
-      text: "I'd like to speak to a human.",
-      timestamp: new Date("2026-01-01T11:00:00Z"),
-    },
-  ];
-  for (const message of messages) {
-    await prisma.message.upsert({
-      where: { id: message.id },
-      update: {},
-      create: {
-        organizationId,
-        phoneNumberId: "pn_acme",
-        ...message,
-      },
-    });
-  }
+      text: "Can you check my order status?",
+      externalMessageId: "wamid.seed.acme.3",
+      timestamp: hoursAgo(0.2),
+    }),
+  ]);
 
-  await prisma.automation.upsert({
-    where: { id: "auto_acme_welcome" },
-    update: {},
-    create: {
-      id: "auto_acme_welcome",
-      organizationId,
-      name: "Welcome new contact",
-      description: "Send a greeting when a new contact writes for the first time.",
-      trigger: "MESSAGE_RECEIVED",
-      conditions: [{ type: "equals", field: "conversation.isNew", value: true }],
-      actions: [{ type: "send_message", text: "Welcome to Acme!" }],
-      isActive: true,
-    },
+  const bobThread = await upsertConversation({
+    id: "conv_acme_bob",
+    organizationId: organization.id,
+    contactId: bob.id,
+    phoneNumberId: number.id,
+    mode: "human",
+    status: "pending",
+    assignedUserId: agent.id,
+    unreadCount: 1,
+    lastMessageAt: hoursAgo(1.5),
+    lastMessagePreview: "I need a refund for order #1042",
+    variables: { orderId: "1042" },
   });
 
-  await prisma.automationRun.upsert({
-    where: { id: "run_acme_1" },
-    update: {},
-    create: {
-      id: "run_acme_1",
-      organizationId,
-      automationId: "auto_acme_welcome",
-      conversationId: "conv_acme_alice",
-      contactId: "contact_acme_alice",
-      eventType: "MESSAGE_RECEIVED",
-      status: "success",
-      triggerPayload: { messageId: "msg_acme_1" },
-      result: { sent: true },
-      startedAt: new Date("2026-01-01T10:00:01Z"),
-      finishedAt: new Date("2026-01-01T10:00:02Z"),
-    },
+  await upsertMessage({
+    id: "msg_acme_bob_1",
+    organizationId: organization.id,
+    conversationId: bobThread.id,
+    contactId: bob.id,
+    phoneNumberId: number.id,
+    direction: "inbound",
+    status: "received",
+    text: "I need a refund for order #1042",
+    externalMessageId: "wamid.seed.acme.4",
+    timestamp: hoursAgo(1.5),
   });
 
-  await prisma.tool.upsert({
-    where: { id: "tool_acme_get_contact" },
-    update: {},
-    create: {
-      id: "tool_acme_get_contact",
-      organizationId,
-      name: "get_contact",
-      description: "Look up a contact by id or WhatsApp id.",
-      type: "internal",
-      inputSchema: { type: "object", properties: { waId: { type: "string" } } },
-      permission: "read",
-    },
+  const priyaThread = await upsertConversation({
+    id: "conv_acme_priya",
+    organizationId: organization.id,
+    contactId: priya.id,
+    phoneNumberId: number.id,
+    mode: "paused",
+    status: "closed",
+    unreadCount: 0,
+    lastMessageAt: hoursAgo(72),
+    lastMessagePreview: "Thanks, that fixed it!",
   });
 
-  await prisma.tool.upsert({
-    where: { id: "tool_acme_send_whatsapp_message" },
-    update: {},
-    create: {
-      id: "tool_acme_send_whatsapp_message",
-      organizationId,
-      name: "send_whatsapp_message",
-      description: "Send a WhatsApp text message to the current contact.",
-      type: "internal",
-      inputSchema: { type: "object", properties: { text: { type: "string" } }, required: ["text"] },
-      permission: "write",
-    },
+  await upsertMessage({
+    id: "msg_acme_priya_1",
+    organizationId: organization.id,
+    conversationId: priyaThread.id,
+    contactId: priya.id,
+    phoneNumberId: number.id,
+    direction: "inbound",
+    status: "received",
+    text: "Thanks, that fixed it!",
+    externalMessageId: "wamid.seed.acme.5",
+    timestamp: hoursAgo(72),
   });
 
-  await prisma.aIAgent.upsert({
-    where: { id: "agent_acme_support" },
-    update: {},
-    create: {
-      id: "agent_acme_support",
-      organizationId,
-      name: "Support Agent",
-      description: "Answers common support questions.",
-      provider: "openai",
-      model: "gpt-4o-mini",
-      systemPrompt: "You are a helpful support agent for Acme Corp.",
-      temperature: 0.3,
-      maxTokens: 512,
-      tools: {
-        connect: [
-          { id: "tool_acme_get_contact" },
-          { id: "tool_acme_send_whatsapp_message" },
-        ],
-      },
-    },
+  await bootstrapOrganizationDefaults({ organizationId: organization.id });
+
+  // Make the refund workflow live so the automation path is visible in the demo.
+  await prisma.automation.updateMany({
+    where: { organizationId: organization.id, name: "Refund requests to a human" },
+    data: { isActive: true },
   });
 
   await prisma.integration.upsert({
-    where: { id: "integration_acme_shopify" },
-    update: {},
+    where: { organizationId_provider_name: { organizationId: organization.id, provider: "shopify", name: "Acme store" } },
+    update: { status: "inactive" },
     create: {
-      id: "integration_acme_shopify",
-      organizationId,
+      organizationId: organization.id,
       provider: "shopify",
-      name: "Acme Store",
+      name: "Acme store",
       category: "ecommerce",
-      status: "active",
-      isActive: true,
+      status: "inactive",
+      isActive: false,
       config: { shopDomain: "acme.myshopify.com" },
-      credentials: encryptSecret("shpat_acme_test_token"),
+      credentials: encryptSecret(JSON.stringify({ accessToken: "shpat_example" })),
     },
   });
 
   await prisma.webhookEvent.upsert({
-    where: { id: "webhook_acme_1" },
+    where: { externalEventId: "seed-webhook-event-acme" },
     update: {},
     create: {
-      id: "webhook_acme_1",
-      organizationId,
+      organizationId: organization.id,
       source: "whatsapp",
-      externalEventId: "wamid.acme.seed.1",
+      externalEventId: "seed-webhook-event-acme",
       eventType: "MESSAGE_RECEIVED",
       status: "processed",
-      payload: { object: "whatsapp_business_account" },
-      processedAt: new Date("2026-01-01T10:00:03Z"),
+      payload: { seeded: true, entry: [{ changes: [{ field: "messages" }] }] },
+      receivedAt: hoursAgo(0.2),
+      processedAt: hoursAgo(0.2),
     },
   });
 
-  await prisma.auditLog.upsert({
-    where: { id: "audit_acme_1" },
-    update: {},
-    create: {
-      id: "audit_acme_1",
-      organizationId,
-      userId: "user_acme_owner",
+  await prisma.auditLog.create({
+    data: {
+      organizationId: organization.id,
+      userId: owner.id,
       actorType: "user",
       action: "organization.seeded",
       entityType: "Organization",
-      entityId: organizationId,
-      metadata: { source: "seed" },
+      entityId: organization.id,
+      metadata: { demo: true },
     },
   });
+
+  return { organization, owner, agent };
 }
 
 async function seedGlobex() {
-  const organizationId = "org_globex";
-
-  await prisma.organization.upsert({
-    where: { id: organizationId },
-    update: { name: "Globex", slug: "globex" },
-    create: { id: organizationId, name: "Globex", slug: "globex", plan: "free" },
+  const organization = await upsertOrganization({
+    id: "org_globex",
+    name: "Globex Fitness",
+    slug: "globex",
+    plan: "free",
   });
 
-  await prisma.user.upsert({
-    where: { id: "user_globex_owner" },
-    update: {},
-    create: {
-      id: "user_globex_owner",
-      organizationId,
-      email: "owner@globex.test",
-      name: "Globex Owner",
-      role: "OWNER",
-    },
+  await upsertUser({
+    id: "user_globex_owner",
+    organizationId: organization.id,
+    email: "owner@globex.test",
+    name: "Grace Owner",
+    role: "OWNER",
   });
 
-  await prisma.whatsAppAccount.upsert({
-    where: { id: "wa_globex" },
-    update: {},
-    create: {
-      id: "wa_globex",
-      organizationId,
-      name: "Globex WhatsApp",
-      wabaId: "WABA_GLOBEX_001",
-      status: "PENDING",
-    },
+  const account = await upsertAccount({
+    id: "wa_globex",
+    organizationId: organization.id,
+    name: "Globex Cloud API",
+    wabaId: "WABA_GLOBEX",
+    status: "PENDING",
   });
 
-  await prisma.whatsAppPhoneNumber.upsert({
-    where: { id: "pn_globex" },
-    update: {},
-    create: {
-      id: "pn_globex",
-      organizationId,
-      whatsappAccountId: "wa_globex",
-      phoneNumberId: "100000000000002",
-      displayPhoneNumber: "+15550000002",
-      status: "PENDING",
-    },
+  const number = await upsertPhoneNumber({
+    id: "pn_globex",
+    organizationId: organization.id,
+    whatsappAccountId: account.id,
+    phoneNumberId: "100000000000002",
+    displayPhoneNumber: "+1 555 010 0002",
+    verifiedName: "Globex Studio",
+    status: "PENDING",
+    providerMode: "meta",
   });
 
-  await prisma.contact.upsert({
-    where: { id: "contact_globex_carol" },
-    update: {},
-    create: {
-      id: "contact_globex_carol",
-      organizationId,
-      waId: "15559990001",
-      name: "Carol Danvers",
-      tags: ["lead"],
-    },
+  const carol = await upsertContact({
+    id: "contact_globex_carol",
+    organizationId: organization.id,
+    waId: "15550004444",
+    name: "Carol Diaz",
+    tags: ["trial"],
   });
 
-  await prisma.conversation.upsert({
-    where: { id: "conv_globex_carol" },
-    update: {},
-    create: {
-      id: "conv_globex_carol",
-      organizationId,
-      contactId: "contact_globex_carol",
-      phoneNumberId: "pn_globex",
-      mode: "ai",
-      status: "open",
-    },
+  const thread = await upsertConversation({
+    id: "conv_globex_carol",
+    organizationId: organization.id,
+    contactId: carol.id,
+    phoneNumberId: number.id,
+    mode: "ai",
+    status: "open",
+    unreadCount: 1,
+    lastMessageAt: hoursAgo(3),
+    lastMessagePreview: "Is the 6am class still open?",
   });
 
-  await prisma.message.upsert({
-    where: { id: "msg_globex_1" },
-    update: {},
-    create: {
-      id: "msg_globex_1",
-      organizationId,
-      conversationId: "conv_globex_carol",
-      contactId: "contact_globex_carol",
-      phoneNumberId: "pn_globex",
-      externalMessageId: "wamid.globex.seed.1",
-      direction: "inbound",
-      type: "text",
-      status: "received",
-      text: "Hello Globex!",
-    },
+  await upsertMessage({
+    id: "msg_globex_carol_1",
+    organizationId: organization.id,
+    conversationId: thread.id,
+    contactId: carol.id,
+    phoneNumberId: number.id,
+    direction: "inbound",
+    status: "received",
+    text: "Is the 6am class still open?",
+    externalMessageId: "wamid.seed.globex.1",
+    timestamp: hoursAgo(3),
   });
+
+  await bootstrapOrganizationDefaults({ organizationId: organization.id });
+
+  return { organization };
 }
 
 async function main() {
-  await seedAcme();
-  await seedGlobex();
-  console.log("Seed complete: organizations acme and globex.");
+  const acme = await seedAcme();
+  const globex = await seedGlobex();
+
+  console.log("Seed complete.");
+  console.log(`  ${acme.organization.name}: owner@acme.test / ${DEMO_PASSWORD}`);
+  console.log(`  ${globex.organization.name}: owner@globex.test / ${DEMO_PASSWORD}`);
+  console.log("  Acme's number runs in simulator mode (no Meta credentials needed).");
 }
 
 main()
-  .then(async () => {
-    await prisma.$disconnect();
+  .catch((error) => {
+    console.error("Seed failed:", error);
+    process.exitCode = 1;
   })
-  .catch(async (error) => {
-    console.error(error);
+  .finally(async () => {
     await prisma.$disconnect();
-    process.exit(1);
   });

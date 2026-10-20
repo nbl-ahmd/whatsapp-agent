@@ -1,9 +1,11 @@
 import { defineConfig } from "prisma/config";
 
-try {
-  process.loadEnvFile();
-} catch {
-  // Environment variables may be injected by the deployment platform.
+for (const file of [".env", "../.env"]) {
+  try {
+    process.loadEnvFile(file);
+  } catch {
+    // Environment variables may be injected by the deployment platform.
+  }
 }
 
 export default defineConfig({

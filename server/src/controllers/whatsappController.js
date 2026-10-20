@@ -1,16 +1,19 @@
 import { env } from "../config/env.js";
 import { NotFoundError, UnauthorizedError, ValidationError } from "../lib/errors.js";
+import { prisma } from "../db/prisma.js";
 import { sendTextMessage } from "../services/messages/outbound.js";
 import { created } from "../utils/http.js";
 
 /**
  * POST /api/whatsapp/messages
  *
- * Phase 2 has no user auth yet, so this endpoint is protected by a shared
- * server-side key (WHATSAPP_TEST_API_KEY). It is disabled in production when the
- * key is not configured. The caller's tenant is trusted only because it holds
- * that server secret; real session-based auth/tenant isolation replaces this in
- * a later phase.
+ * Two ways in:
+ *  - a signed-in operator (the tenant comes from the session token), or
+ *  - a server-to-server caller holding WHATSAPP_TEST_API_KEY (the tenant comes
+ *    from the body, because the caller proved it holds the shared secret).
+ *
+ * The browser is never allowed to pick its own organization id: it must have a
+ * session, and then the body's organizationId - if present - is ignored.
  */
 function requireServerAccess(req) {
   const expected = env.meta.testApiKey;
@@ -20,17 +23,32 @@ function requireServerAccess(req) {
     }
     return;
   }
-  if (env.isProduction) {
-    throw new NotFoundError("Not found");
-  }
+  if (env.isProduction) throw new NotFoundError("Not found");
 }
 
 export async function sendMessage(req, res) {
-  requireServerAccess(req);
+  const body = req.body ?? {};
+  const to = body.to;
+  const text = body.text;
+  if (!to || !text) throw new ValidationError("to and text are required");
 
-  const { organizationId, phoneNumberId, to, text } = req.body ?? {};
-  if (!organizationId || !phoneNumberId || !to || !text) {
-    throw new ValidationError("organizationId, phoneNumberId, to and text are required");
+  let organizationId = req.auth?.organizationId ?? null;
+  let phoneNumberId = body.phoneNumberId ?? null;
+
+  if (!organizationId) {
+    requireServerAccess(req);
+    organizationId = body.organizationId;
+    if (!organizationId) throw new ValidationError("organizationId is required");
+  }
+
+  // Default to the organization's first connected number when none is given.
+  if (!phoneNumberId) {
+    const number = await prisma.whatsAppPhoneNumber.findFirst({
+      where: { organizationId },
+      orderBy: { createdAt: "asc" },
+    });
+    if (!number) throw new ValidationError("phoneNumberId is required (no number on this organization)");
+    phoneNumberId = number.phoneNumberId;
   }
 
   const result = await sendTextMessage({
@@ -50,5 +68,6 @@ export async function sendMessage(req, res) {
       conversationId: result.message.conversationId,
       contactId: result.message.contactId,
     },
+    provider: result.providerResponse,
   });
 }

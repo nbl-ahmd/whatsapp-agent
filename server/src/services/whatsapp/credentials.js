@@ -6,11 +6,14 @@ import { prisma } from "../../db/prisma.js";
  * Tenant resolution by `phone_number_id`. The Meta webhook tells us which of
  * our phone numbers received the event; that is the only trusted way to map an
  * inbound event to an organization.
+ *
+ * Internal callers (inbox, automations, AI) hold the database record id instead,
+ * so both identifiers resolve here.
  */
-export async function resolvePhoneNumberContext(phoneNumberId) {
-  if (!phoneNumberId) return null;
-  return prisma.whatsAppPhoneNumber.findUnique({
-    where: { phoneNumberId },
+export async function resolvePhoneNumberContext(identifier) {
+  if (!identifier) return null;
+  return prisma.whatsAppPhoneNumber.findFirst({
+    where: { OR: [{ id: identifier }, { phoneNumberId: identifier }] },
     include: { whatsappAccount: true },
   });
 }
