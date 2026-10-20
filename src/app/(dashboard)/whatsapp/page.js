@@ -80,7 +80,17 @@ export default function WhatsAppPage() {
   const [verifyResult, setVerifyResult] = useState(null);
   const [copied, setCopied] = useState(false);
 
-  const [test, setTest] = useState({ to: "", text: "Hello from the operator desk.", numberId: "" });
+  const [test, setTest] = useState({
+    to: "",
+    text: "Hello from the operator desk.",
+    numberId: "",
+    type: "text",
+    mediaLink: "",
+    filename: "",
+    templateName: "",
+    templateLanguage: "en_US",
+    components: "",
+  });
   const [testResult, setTestResult] = useState(null);
 
   const list = numbers.data?.phoneNumbers ?? [];
@@ -184,11 +194,29 @@ export default function WhatsAppPage() {
     setTestResult(null);
     try {
       const number = list.find((row) => row.id === numberId);
-      const result = await api.post("/api/whatsapp/messages", {
+      const payload = {
         to: test.to,
-        text: test.text,
+        type: test.type,
         ...(number ? { phoneNumberId: number.phoneNumberId } : {}),
-      });
+      };
+
+      if (test.type === "text") {
+        payload.text = test.text;
+      } else if (test.type === "image" || test.type === "document") {
+        payload.media = {
+          link: test.mediaLink,
+          caption: test.text || undefined,
+          ...(test.type === "document" && test.filename ? { filename: test.filename } : {}),
+        };
+      } else if (test.type === "template") {
+        payload.template = {
+          name: test.templateName,
+          language: test.templateLanguage || "en_US",
+          ...(test.components.trim() ? { components: JSON.parse(test.components) } : {}),
+        };
+      }
+
+      const result = await api.post("/api/whatsapp/messages", payload);
       setTestResult(result);
       numbers.reload();
     } catch (caught) {
@@ -204,7 +232,7 @@ export default function WhatsAppPage() {
     <div className="space-y-5">
       <PageHeader
         title="WhatsApp"
-        description="Paste Meta test credentials here. They are encrypted at rest on the server and never returned to this page."
+        description="Paste Meta test credentials per number, or set shared app credentials in Settings → API credentials. Secrets are encrypted at rest and never returned to this page."
         actions={
           <>
             <Button variant="outline" onClick={refreshAll}>
@@ -458,7 +486,8 @@ export default function WhatsAppPage() {
                       }
                     />
                     <p className="text-xs text-muted-foreground">
-                      Must match the server&apos;s WHATSAPP_VERIFY_TOKEN.
+                      An extra verify token accepted for this account. Settings → API credentials
+                      is usually enough.
                     </p>
                   </div>
                 </div>
@@ -490,15 +519,21 @@ export default function WhatsAppPage() {
                     </dd>
                   </div>
                   <div className="flex items-center justify-between gap-4">
-                    <dt className="text-muted-foreground">Verify token (server)</dt>
+                    <dt className="text-muted-foreground">Verify token (effective)</dt>
                     <dd>
                       <SecretBadge label="" ok={webhook.data.verifyTokenConfigured} />
                     </dd>
                   </div>
                   <div className="flex items-center justify-between gap-4">
-                    <dt className="text-muted-foreground">App secret (server)</dt>
+                    <dt className="text-muted-foreground">App secret (effective)</dt>
                     <dd>
                       <SecretBadge label="" ok={webhook.data.appSecretConfigured} />
+                    </dd>
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <dt className="text-muted-foreground">Access token (effective)</dt>
+                    <dd>
+                      <SecretBadge label="" ok={webhook.data.accessTokenConfigured} />
                     </dd>
                   </div>
                   <div className="flex items-center justify-between gap-4">
@@ -548,9 +583,9 @@ export default function WhatsAppPage() {
                 </Button>
 
                 <p className="text-xs leading-5 text-muted-foreground">
-                  In Meta → WhatsApp → Configuration, paste the callback URL, the verify token from
-                  the server environment, and subscribe to the{" "}
-                  <span className="font-medium text-foreground">messages</span> field.
+                  In Meta → WhatsApp → Configuration, paste the callback URL and the verify token
+                  from Settings → API credentials (or the server environment), then subscribe to
+                  the <span className="font-medium text-foreground">messages</span> field.
                 </p>
               </div>
             ) : (
@@ -583,6 +618,23 @@ export default function WhatsAppPage() {
                 </Select>
               </div>
               <div className="space-y-1.5">
+                <Label htmlFor="test-type">Message type</Label>
+                <Select
+                  value={test.type}
+                  onValueChange={(value) => setTest({ ...test, type: value })}
+                >
+                  <SelectTrigger id="test-type" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="text">Text</SelectItem>
+                    <SelectItem value="image">Image</SelectItem>
+                    <SelectItem value="document">Document</SelectItem>
+                    <SelectItem value="template">Template</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
                 <Label htmlFor="test-to">Recipient</Label>
                 <Input
                   id="test-to"
@@ -595,13 +647,85 @@ export default function WhatsAppPage() {
                   For a Meta test number, only approved recipients receive it.
                 </p>
               </div>
+
+              {test.type === "image" || test.type === "document" ? (
+                <>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="test-media">Media URL</Label>
+                    <Input
+                      id="test-media"
+                      type="url"
+                      value={test.mediaLink}
+                      onChange={(event) => setTest({ ...test, mediaLink: event.target.value })}
+                      placeholder="https://cdn.example.com/file.jpg"
+                      required
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Must be publicly reachable by Meta over HTTPS.
+                    </p>
+                  </div>
+                  {test.type === "document" ? (
+                    <div className="space-y-1.5">
+                      <Label htmlFor="test-filename">Filename (optional)</Label>
+                      <Input
+                        id="test-filename"
+                        value={test.filename}
+                        onChange={(event) => setTest({ ...test, filename: event.target.value })}
+                        placeholder="invoice.pdf"
+                      />
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
+
+              {test.type === "template" ? (
+                <>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="test-template">Template name</Label>
+                      <Input
+                        id="test-template"
+                        value={test.templateName}
+                        onChange={(event) => setTest({ ...test, templateName: event.target.value })}
+                        placeholder="order_update"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="test-language">Language</Label>
+                      <Input
+                        id="test-language"
+                        value={test.templateLanguage}
+                        onChange={(event) =>
+                          setTest({ ...test, templateLanguage: event.target.value })
+                        }
+                        placeholder="en_US"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="test-components">Components JSON (optional)</Label>
+                    <Textarea
+                      id="test-components"
+                      value={test.components}
+                      onChange={(event) => setTest({ ...test, components: event.target.value })}
+                      placeholder='[{"type":"body","parameters":[{"type":"text","text":"Ada"}]}]'
+                      className="font-mono text-xs"
+                    />
+                  </div>
+                </>
+              ) : null}
+
               <div className="space-y-1.5">
-                <Label htmlFor="test-text">Text</Label>
+                <Label htmlFor="test-text">
+                  {test.type === "text" ? "Text" : test.type === "template" ? "Note (not sent)" : "Caption"}
+                </Label>
                 <Textarea
                   id="test-text"
                   value={test.text}
                   onChange={(event) => setTest({ ...test, text: event.target.value })}
-                  required
+                  required={test.type === "text"}
                 />
               </div>
               <div className="flex justify-end">

@@ -2,7 +2,7 @@ import { CONVERSATION_MODE } from "../../lib/constants.js";
 import { recordAudit } from "../../lib/audit.js";
 import { ValidationError } from "../../lib/errors.js";
 import { getConversationDetail, markConversationRead, setConversationMode } from "../conversations/service.js";
-import { sendTextMessage } from "./outbound.js";
+import { sendMessage } from "./outbound.js";
 
 /**
  * A human reply from the inbox.
@@ -10,18 +10,34 @@ import { sendTextMessage } from "./outbound.js";
  * Replying is a take-over: the conversation switches to `human` mode in the same
  * call, so the AI cannot answer over the top of a teammate.
  */
-export async function replyToConversation({ organizationId, conversationId, userId, text, req = null }) {
+export async function replyToConversation({
+  organizationId,
+  conversationId,
+  userId,
+  type = "text",
+  text,
+  media,
+  template,
+  interactive,
+  req = null,
+}) {
   const conversation = await getConversationDetail({ organizationId, conversationId });
 
-  const body = String(text ?? "").trim();
-  if (!body) throw new ValidationError("Message text is required");
-  if (body.length > 4096) throw new ValidationError("Message text must be at most 4096 characters");
+  if (type === "text") {
+    const body = String(text ?? "").trim();
+    if (!body) throw new ValidationError("Message text is required");
+    if (body.length > 4096) throw new ValidationError("Message text must be at most 4096 characters");
+  }
 
-  const { message } = await sendTextMessage({
+  const { message } = await sendMessage({
     organizationId,
     phoneNumberId: conversation.phoneNumberId,
     to: conversation.contact.waId,
-    text: body,
+    type,
+    text,
+    media,
+    template,
+    interactive,
   });
 
   await setConversationMode({
@@ -38,7 +54,7 @@ export async function replyToConversation({ organizationId, conversationId, user
     action: "conversation.replied",
     entityType: "Conversation",
     entityId: conversationId,
-    metadata: { messageId: message.id, mode: "human" },
+    metadata: { messageId: message.id, type, mode: "human" },
     req,
   });
 

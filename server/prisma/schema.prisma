@@ -140,6 +140,32 @@ model Organization {
   integrations     Integration[]
   webhookEvents    WebhookEvent[]
   auditLogs        AuditLog[]
+  credentialSettings OrganizationSettings?
+}
+
+// Organization-level BYOK credentials. Secrets are encrypted at rest and are
+// never returned by the API; env vars remain the fallback for local/dev setups.
+model OrganizationSettings {
+  organizationId String @id
+
+  // Meta app credentials. The access token is a fallback for phone numbers that
+  // do not store their own token.
+  metaAppSecret       String?
+  metaVerifyToken     String?
+  metaAccessToken     String?
+  metaGraphApiVersion String?
+  metaGraphApiBaseUrl String?
+
+  // AI provider (OpenAI-compatible or mock).
+  aiProvider String?
+  aiApiKey   String?
+  aiBaseUrl  String?
+  aiModel    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
 model User {

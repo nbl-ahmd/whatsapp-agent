@@ -55,7 +55,11 @@ export async function reply(req, res) {
     organizationId: req.auth.organizationId,
     conversationId: req.params.id,
     userId: req.auth.userId,
+    type: req.body?.type ?? "text",
     text: req.body?.text,
+    media: req.body?.media,
+    template: req.body?.template,
+    interactive: req.body?.interactive,
     req,
   });
   return created(res, result);

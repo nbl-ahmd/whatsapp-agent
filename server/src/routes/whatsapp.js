@@ -14,6 +14,7 @@ router.post("/messages", optionalAuth, asyncHandler(sendMessage));
 router.get("/numbers", asyncHandler(requireAuth), asyncHandler(accounts.numbers));
 router.get("/accounts", asyncHandler(requireAuth), asyncHandler(accounts.accounts));
 router.get("/webhook-status", asyncHandler(requireAuth), asyncHandler(accounts.webhookStatus));
+router.get("/templates", asyncHandler(requireAuth), asyncHandler(accounts.templates));
 router.post("/accounts", asyncHandler(requireAuth), requireRole(...ADMIN_ROLES), asyncHandler(accounts.create));
 router.patch("/numbers/:id", asyncHandler(requireAuth), requireRole(...ADMIN_ROLES), asyncHandler(accounts.update));
 router.post(

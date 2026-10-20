@@ -9,12 +9,13 @@ import { createHmac, timingSafeEqual } from "node:crypto";
  */
 
 /**
- * @param {{ mode?: string|null, token?: string|null, challenge?: string|null, expectedToken?: string }} params
+ * @param {{ mode?: string|null, token?: string|null, challenge?: string|null, expectedToken?: string, expectedTokens?: string[] }} params
  */
-export function verifyChallenge({ mode, token, challenge, expectedToken }) {
-  if (!expectedToken) return { ok: false, reason: "verify_token_not_configured" };
+export function verifyChallenge({ mode, token, challenge, expectedToken, expectedTokens }) {
+  const candidates = expectedTokens ?? (expectedToken ? [expectedToken] : []);
+  if (candidates.length === 0) return { ok: false, reason: "verify_token_not_configured" };
   if (mode !== "subscribe") return { ok: false, reason: "invalid_mode" };
-  if (!token || token !== expectedToken) return { ok: false, reason: "invalid_token" };
+  if (!token || !candidates.includes(token)) return { ok: false, reason: "invalid_token" };
   if (!challenge) return { ok: false, reason: "missing_challenge" };
   return { ok: true, challenge };
 }

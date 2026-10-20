@@ -8,6 +8,7 @@ import healthRouter from "./health.js";
 import integrationsRouter from "./integrations.js";
 import logsRouter from "./logs.js";
 import organizationsRouter from "./organizations.js";
+import settingsRouter from "./settings.js";
 import toolsRouter from "./tools.js";
 import whatsappWebhookRouter from "./webhooks/whatsapp.js";
 import whatsappRouter from "./whatsapp.js";
@@ -20,6 +21,7 @@ export function registerRoutes(app) {
 
   app.use("/api/auth", authRouter);
   app.use("/api/organizations", organizationsRouter);
+  app.use("/api/settings", settingsRouter);
   app.use("/api/dashboard", dashboardRouter);
   app.use("/api/contacts", contactsRouter);
   app.use("/api/conversations", conversationsRouter);

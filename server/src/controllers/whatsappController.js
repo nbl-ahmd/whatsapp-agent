@@ -1,7 +1,8 @@
 import { env } from "../config/env.js";
 import { NotFoundError, UnauthorizedError, ValidationError } from "../lib/errors.js";
+import { asEnum } from "../lib/validate.js";
 import { prisma } from "../db/prisma.js";
-import { sendTextMessage } from "../services/messages/outbound.js";
+import { MESSAGE_TYPES, sendMessage as sendOutboundMessage } from "../services/messages/outbound.js";
 import { created } from "../utils/http.js";
 
 /**
@@ -29,8 +30,9 @@ function requireServerAccess(req) {
 export async function sendMessage(req, res) {
   const body = req.body ?? {};
   const to = body.to;
-  const text = body.text;
-  if (!to || !text) throw new ValidationError("to and text are required");
+  if (!to) throw new ValidationError("to is required");
+
+  const type = asEnum(body.type, "type", MESSAGE_TYPES, { fallback: "text" });
 
   let organizationId = req.auth?.organizationId ?? null;
   let phoneNumberId = body.phoneNumberId ?? null;
@@ -51,20 +53,28 @@ export async function sendMessage(req, res) {
     phoneNumberId = number.phoneNumberId;
   }
 
-  const result = await sendTextMessage({
+  const result = await sendOutboundMessage({
     organizationId,
     phoneNumberId,
     to: String(to),
-    text: String(text),
+    type,
+    text: body.text,
+    previewUrl: body.previewUrl,
+    media: body.media,
+    template: body.template,
+    interactive: body.interactive,
   });
 
   return created(res, {
     message: {
       id: result.message.id,
       direction: result.message.direction,
+      type: result.message.type,
       status: result.message.status,
       externalMessageId: result.message.externalMessageId,
       text: result.message.text,
+      media: result.message.media,
+      template: result.message.template,
       conversationId: result.message.conversationId,
       contactId: result.message.contactId,
     },

@@ -1,13 +1,13 @@
-import { env } from "../../config/env.js";
 import { prisma } from "../../db/prisma.js";
 import { recordAudit } from "../../lib/audit.js";
 import { encryptSecret, isEncrypted } from "../../lib/crypto.js";
 import { ConflictError, NotFoundError, ValidationError } from "../../lib/errors.js";
 import { logger } from "../../lib/logger.js";
 import { asEnum, asString } from "../../lib/validate.js";
-import { getPhoneNumber as getPhoneNumberFromMeta } from "./service.js";
+import { getPhoneNumber as getPhoneNumberFromMeta, getTemplates as getTemplatesFromMeta } from "./service.js";
 import { PROVIDER_MODE } from "../messages/outbound.js";
-import { resolveAccessToken } from "./credentials.js";
+import { resolveAccessTokenForAccount } from "./credentials.js";
+import { getMetaConfig } from "../settings/index.js";
 
 /**
  * WhatsApp connection management: accounts, phone numbers, credentials.
@@ -98,6 +98,9 @@ export async function createAccount({
   });
   if (existing) throw new ConflictError("That WhatsApp phone number id is already connected");
 
+  const fallback = accessToken ? null : await getMetaConfig({ organizationId });
+  const hasToken = Boolean(accessToken || fallback?.accessToken);
+
   const account = await prisma.whatsAppAccount.create({
     data: {
       organizationId,
@@ -106,7 +109,7 @@ export async function createAccount({
       accessToken: accessToken ? encryptSecret(accessToken) : null,
       appSecret: appSecret ? encryptSecret(appSecret) : null,
       webhookVerifyToken: webhookVerifyToken ? encryptSecret(webhookVerifyToken) : null,
-      status: accessToken ? "ACTIVE" : "PENDING",
+      status: hasToken ? "ACTIVE" : "PENDING",
     },
   });
 
@@ -223,15 +226,21 @@ export async function verifyPhoneNumber({ organizationId, id, req = null }) {
     };
   }
 
-  const accessToken = resolveAccessToken(record.whatsappAccount);
+  const accessToken = await resolveAccessTokenForAccount(record.whatsappAccount);
   if (!accessToken) {
     throw new ValidationError(
-      "No access token stored for this account. Paste a token in WhatsApp settings first.",
+      "No access token stored. Paste one here or in Settings → API credentials.",
     );
   }
 
+  const meta = await getMetaConfig({ organizationId });
+
   try {
-    const response = await getPhoneNumberFromMeta(record.phoneNumberId, { accessToken });
+    const response = await getPhoneNumberFromMeta(record.phoneNumberId, {
+      accessToken,
+      baseUrl: meta.graphApiBaseUrl,
+      version: meta.graphApiVersion,
+    });
 
     const updated = await prisma.whatsAppPhoneNumber.update({
       where: { id: record.id },
@@ -273,8 +282,49 @@ export async function verifyPhoneNumber({ organizationId, id, req = null }) {
   }
 }
 
-/** Webhook health for the WhatsApp page. */
-export async function getWebhookStatus({ organizationId }) {
+/**
+ * Approved message templates for the account's WABA. Templates only exist on
+ * Meta; simulator numbers return an empty list.
+ */
+export async function listApprovedTemplates({ organizationId, wabaId = null }) {
+  const account = await prisma.whatsAppAccount.findFirst({
+    where: {
+      organizationId,
+      ...(wabaId ? { wabaId } : { wabaId: { not: null } }),
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  if (!account?.wabaId) {
+    throw new ValidationError("Add a WABA id to a WhatsApp account before loading templates");
+  }
+
+  const token = await resolveAccessTokenForAccount(account);
+  if (!token) {
+    throw new ValidationError("No access token stored. Add one in Settings → API credentials.");
+  }
+
+  const meta = await getMetaConfig({ organizationId });
+  const response = await getTemplatesFromMeta(account.wabaId, {
+    accessToken: token,
+    baseUrl: meta.graphApiBaseUrl,
+    version: meta.graphApiVersion,
+  });
+
+  return {
+    wabaId: account.wabaId,
+    templates: (response?.data ?? []).map((template) => ({
+      id: template.id,
+      name: template.name,
+      status: template.status,
+      category: template.category,
+      language: template.language,
+      components: template.components ?? [],
+    })),
+  };
+}
+
+/** Webhook health for the WhatsApp page. */export async function getWebhookStatus({ organizationId }) {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
   const [lastEvent, events24h, failed24h] = await Promise.all([
@@ -294,11 +344,16 @@ export async function getWebhookStatus({ organizationId }) {
     select: { providerMode: true },
   });
 
+  const meta = await getMetaConfig({ organizationId });
+
   return {
-    verifyTokenConfigured: Boolean(env.meta.verifyToken),
-    appSecretConfigured: Boolean(env.meta.appSecret),
+    verifyTokenConfigured: Boolean(meta.verifyToken),
+    appSecretConfigured: Boolean(meta.appSecret),
+    accessTokenConfigured: Boolean(meta.accessToken),
+    credentialSource: meta.source,
+    storedCredentials: meta.stored,
     callbackPath: "/api/webhooks/whatsapp",
-    graphApiVersion: env.meta.graphApiVersion,
+    graphApiVersion: meta.graphApiVersion,
     lastEvent,
     events24h,
     failed24h,

@@ -7,6 +7,7 @@ import { listConversationMessages } from "../messages/service.js";
 import { sendTextMessage } from "../messages/outbound.js";
 import { executeTool, getTool } from "../tools/registry.js";
 import { chatCompletion } from "./provider.js";
+import { getAiConfig } from "../settings/index.js";
 
 export const descriptor = Object.freeze({
   name: "ai",
@@ -75,10 +76,11 @@ export async function runAgentForConversation({ organizationId, conversationId, 
   const agent = await getActiveAgent({ organizationId });
   if (!agent) return { skipped: "no-active-agent" };
 
-  const [contact, organization, history] = await Promise.all([
+  const [contact, organization, history, aiConfig] = await Promise.all([
     prisma.contact.findFirst({ where: { id: conversation.contactId, organizationId } }),
     prisma.organization.findUnique({ where: { id: organizationId } }),
     listConversationMessages({ organizationId, conversationId, take: HISTORY_LIMIT }),
+    getAiConfig({ organizationId }),
   ]);
 
   const enabledTools = agent.tools.filter((tool) => tool.isActive && getTool(tool.name));
@@ -125,6 +127,7 @@ export async function runAgentForConversation({ organizationId, conversationId, 
       model: agent.model,
       temperature: agent.temperature ?? undefined,
       maxTokens: agent.maxTokens ?? undefined,
+      config: aiConfig,
     });
 
     if (!completion.toolCalls?.length) {
@@ -260,6 +263,7 @@ export async function previewAgentReply({ organizationId, agentId, conversationI
     ],
     tools: [],
     model: agent.model,
+    config: await getAiConfig({ organizationId }),
   });
 
   return { text: completion.text, provider: completion.provider, steps: history.length };

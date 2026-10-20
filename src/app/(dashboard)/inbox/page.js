@@ -17,6 +17,7 @@ import {
   Smile,
   Paperclip,
   AtSign,
+  FileText,
   Search,
   Sparkles,
   X,
@@ -35,8 +36,16 @@ import {
 } from "@/components/ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 /**
  * The inbox: the ranked queue on the left, the live thread in the middle, and the
@@ -74,6 +83,7 @@ export default function InboxPage() {
   const [messages, setMessages] = useState([]);
   const [messagesFor, setMessagesFor] = useState(null);
   const [draft, setDraft] = useState("");
+  const [attachment, setAttachment] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -140,13 +150,25 @@ export default function InboxPage() {
   async function sendReply(event) {
     event.preventDefault();
     const text = draft.trim();
-    if (!text || !activeId) return;
+    const hasAttachment = Boolean(attachment?.link?.trim());
+    if ((!text && !hasAttachment) || !activeId) return;
 
     setBusy(true);
     setError(null);
     try {
-      const result = await api.post(`/api/conversations/${activeId}/messages`, { text });
+      const payload = hasAttachment
+        ? {
+            type: attachment.type,
+            media: {
+              link: attachment.link.trim(),
+              caption: text || undefined,
+              filename: attachment.filename?.trim() || undefined,
+            },
+          }
+        : { type: "text", text };
+      const result = await api.post(`/api/conversations/${activeId}/messages`, payload);
       setDraft("");
+      setAttachment(null);
       setMessages((current) => [...current, result.message]);
       setDetail((current) => (current ? { ...current, mode: "human", status: "pending" } : current));
       list.reload();
@@ -411,17 +433,87 @@ export default function InboxPage() {
                   ) : null}
 
                   <form onSubmit={sendReply} className="space-y-2 p-3">
+                    {attachment ? (
+                      <div className="grid gap-2 rounded-lg border bg-muted/30 p-2.5 sm:grid-cols-[130px_minmax(0,1fr)]">
+                        <div className="space-y-1">
+                          <Label htmlFor="attach-type" className="text-xs">
+                            Attachment
+                          </Label>
+                          <Select
+                            value={attachment.type}
+                            onValueChange={(next) => setAttachment({ ...attachment, type: next })}
+                          >
+                            <SelectTrigger id="attach-type" size="sm" className="w-full">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="image">Image</SelectItem>
+                              <SelectItem value="document">Document</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor="attach-link" className="text-xs">
+                            Media URL
+                          </Label>
+                          <div className="flex gap-2">
+                            <Input
+                              id="attach-link"
+                              value={attachment.link}
+                              onChange={(event) =>
+                                setAttachment({ ...attachment, link: event.target.value })
+                              }
+                              placeholder="https://cdn.example.com/file.jpg"
+                            />
+                            {attachment.type === "document" ? (
+                              <Input
+                                value={attachment.filename}
+                                onChange={(event) =>
+                                  setAttachment({ ...attachment, filename: event.target.value })
+                                }
+                                placeholder="filename.pdf"
+                                className="w-[150px]"
+                              />
+                            ) : null}
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label="Remove attachment"
+                              onClick={() => setAttachment(null)}
+                            >
+                              <X />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+
                     <Textarea
                       value={draft}
                       onChange={(event) => setDraft(event.target.value)}
                       onKeyDown={(event) => {
                         if ((event.metaKey || event.ctrlKey) && event.key === "Enter") sendReply(event);
                       }}
-                      placeholder={`Reply as ${user?.name ?? "operator"}…`}
+                      placeholder={
+                        attachment
+                          ? "Add a caption (optional)…"
+                          : `Reply as ${user?.name ?? "operator"}…`
+                      }
                       className="min-h-20 resize-none"
                     />
                     <div className="flex items-center gap-1">
-                      <Button type="button" variant="ghost" size="icon-sm" aria-label="Attach">
+                      <Button
+                        type="button"
+                        variant={attachment ? "secondary" : "ghost"}
+                        size="icon-sm"
+                        aria-label="Attach image or document"
+                        onClick={() =>
+                          setAttachment(
+                            attachment ? null : { type: "image", link: "", filename: "" },
+                          )
+                        }
+                      >
                         <Paperclip />
                       </Button>
                       <Button type="button" variant="ghost" size="icon-sm" aria-label="Emoji">
@@ -433,7 +525,12 @@ export default function InboxPage() {
                       <span className="ml-1 hidden text-xs text-muted-foreground sm:inline">
                         {selected.mode === "human" ? "Replying as you" : "Sending switches to human mode"}
                       </span>
-                      <Button type="submit" size="sm" className="ml-auto" disabled={busy || !draft.trim()}>
+                      <Button
+                        type="submit"
+                        size="sm"
+                        className="ml-auto"
+                        disabled={busy || (!attachment?.link?.trim() && !draft.trim())}
+                      >
                         <Send />
                         {busy ? "Sending…" : "Send"}
                       </Button>
@@ -612,9 +709,9 @@ function DetailRow({ icon: Icon, label, value }) {
 
 function MessageBubble({ message }) {
   const outbound = message.direction === "outbound";
-  const text =
-    message.text ||
-    (message.type && message.type !== "text" ? `[${message.type} message]` : "(no text)");
+  const media = message.media ?? null;
+  const mediaLink = typeof media?.link === "string" ? media.link : null;
+  const caption = message.text ?? null;
 
   return (
     <div className={`flex items-end gap-2 ${outbound ? "justify-end" : "justify-start"}`}>
@@ -625,13 +722,44 @@ function MessageBubble({ message }) {
       ) : null}
       <div className="max-w-[75%]">
         <div
-          className={`rounded-2xl px-3.5 py-2 text-sm ${
+          className={`space-y-2 rounded-2xl px-3.5 py-2 text-sm ${
             outbound
               ? "rounded-br-md bg-primary text-primary-foreground"
               : "rounded-bl-md border bg-card"
           }`}
         >
-          {text}
+          {message.type === "image" && mediaLink ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={mediaLink}
+              alt={media?.caption || "Image attachment"}
+              className="max-h-64 rounded-lg object-contain"
+            />
+          ) : null}
+
+          {message.type === "document" && mediaLink ? (
+            <a
+              href={mediaLink}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-2 underline underline-offset-2"
+            >
+              <FileText className="size-4 shrink-0" />
+              {media?.filename || "Document"}
+            </a>
+          ) : null}
+
+          {caption ? <p className="whitespace-pre-wrap">{caption}</p> : null}
+
+          {!caption && !mediaLink ? (
+            <p className="opacity-80">[{message.type} message]</p>
+          ) : null}
+
+          {message.error ? (
+            <p className={`text-xs ${outbound ? "text-primary-foreground/80" : "text-rose-600"}`}>
+              {message.error}
+            </p>
+          ) : null}
         </div>
         <div
           className={`mt-1 flex items-center gap-1 text-[11px] text-muted-foreground ${

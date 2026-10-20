@@ -7,14 +7,16 @@ import {
   setAgentActive,
   updateAgent,
 } from "../services/ai/agents.js";
-import { activeProvider, previewAgentReply } from "../services/ai/index.js";
+import { previewAgentReply } from "../services/ai/index.js";
+import { getAiConfig } from "../services/settings/index.js";
 import { asString } from "../lib/validate.js";
 import { created, ok } from "../utils/http.js";
 
 export async function index(req, res) {
   const agents = await listAgents({ organizationId: req.auth.organizationId });
   const tools = await agentToolOptions({ organizationId: req.auth.organizationId });
-  return ok(res, { agents, tools, provider: activeProvider() });
+  const ai = await getAiConfig({ organizationId: req.auth.organizationId });
+  return ok(res, { agents, tools, provider: ai.provider });
 }
 
 export async function show(req, res) {

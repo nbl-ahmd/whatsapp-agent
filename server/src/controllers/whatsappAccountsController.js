@@ -2,10 +2,12 @@ import {
   createAccount,
   getWebhookStatus,
   listAccounts,
+  listApprovedTemplates,
   listPhoneNumbers,
   updatePhoneNumber,
   verifyPhoneNumber,
 } from "../services/whatsapp/accounts.js";
+import { asString } from "../lib/validate.js";
 import { created, ok } from "../utils/http.js";
 
 export async function numbers(req, res) {
@@ -49,4 +51,12 @@ export async function verify(req, res) {
 export async function webhookStatus(req, res) {
   const status = await getWebhookStatus({ organizationId: req.auth.organizationId });
   return ok(res, status);
+}
+
+export async function templates(req, res) {
+  const result = await listApprovedTemplates({
+    organizationId: req.auth.organizationId,
+    wabaId: asString(req.query.wabaId, "wabaId", { max: 64 }),
+  });
+  return ok(res, result);
 }

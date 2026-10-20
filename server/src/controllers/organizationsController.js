@@ -12,12 +12,6 @@ export async function update(req, res) {
     organizationId: req.auth.organizationId,
     data: {
       name: req.body?.name === undefined ? undefined : asString(req.body.name, "name", { max: 120 }),
-      settings:
-        req.body?.settings === undefined
-          ? undefined
-          : req.body.settings && typeof req.body.settings === "object"
-            ? req.body.settings
-            : {},
     },
     req,
   });

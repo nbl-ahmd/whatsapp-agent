@@ -27,11 +27,29 @@ function toOpenAiTools(tools) {
   }));
 }
 
-async function openAiCompletion({ messages, tools, model, temperature, maxTokens, fetchImpl }) {
-  if (!env.ai.apiKey) throw new ExternalServiceError("AI_API_KEY is not configured");
+function envConfig() {
+  return {
+    provider: env.ai.provider,
+    apiKey: env.ai.apiKey,
+    baseUrl: env.ai.baseUrl,
+    model: env.ai.model,
+  };
+}
+
+async function openAiCompletion({
+  messages,
+  tools,
+  model,
+  temperature,
+  maxTokens,
+  fetchImpl,
+  config,
+}) {
+  const ai = config ?? envConfig();
+  if (!ai.apiKey) throw new ExternalServiceError("No AI API key configured. Add one in Settings → API credentials.");
 
   const body = {
-    model: model || env.ai.model,
+    model: model || ai.model,
     messages,
     temperature: temperature ?? 0.3,
     ...(maxTokens ? { max_tokens: maxTokens } : {}),
@@ -40,11 +58,11 @@ async function openAiCompletion({ messages, tools, model, temperature, maxTokens
 
   let response;
   try {
-    response = await (fetchImpl ?? fetch)(`${env.ai.baseUrl.replace(/\/$/, "")}/chat/completions`, {
+    response = await (fetchImpl ?? fetch)(`${ai.baseUrl.replace(/\/$/, "")}/chat/completions`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${env.ai.apiKey}`,
+        authorization: `Bearer ${ai.apiKey}`,
       },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
@@ -141,7 +159,7 @@ async function mockCompletion({ messages, tools = [] }) {
       contactName ? `Hi ${contactName}!` : "Hi!",
       trimmed ? `You wrote: "${trimmed}".` : "",
       "This reply came from the built-in mock AI provider, so no model was called.",
-      "Set AI_API_KEY (and AI_PROVIDER=openai) to use a real model.",
+      "Add an API key in Settings → API credentials (or set AI_API_KEY) to use a real model.",
     ]
       .filter(Boolean)
       .join(" "),
@@ -159,15 +177,31 @@ function safeName(content) {
   }
 }
 
-export async function chatCompletion({ messages, tools = [], model, temperature, maxTokens, fetchImpl }) {
-  const provider = env.ai.provider;
+export async function chatCompletion({
+  messages,
+  tools = [],
+  model,
+  temperature,
+  maxTokens,
+  fetchImpl,
+  config,
+}) {
+  const ai = config ?? envConfig();
 
-  if (provider === "mock") {
+  if (ai.provider === "mock") {
     logger.debug("Using mock AI provider");
     return mockCompletion({ messages, tools });
   }
 
-  return openAiCompletion({ messages, tools, model, temperature, maxTokens, fetchImpl });
+  return openAiCompletion({
+    messages,
+    tools,
+    model,
+    temperature,
+    maxTokens,
+    fetchImpl,
+    config: ai,
+  });
 }
 
 export function activeProvider() {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, Loader2, Plus, ShieldCheck, XCircle } from "lucide-react";
+import { CheckCircle2, KeyRound, Loader2, Plus, ShieldCheck, Sparkles, XCircle } from "lucide-react";
 import { api } from "@/lib/api";
 import { useResource } from "@/lib/useResource";
 import { formatRelative, titleCase } from "@/lib/format";
@@ -41,6 +41,7 @@ import {
  */
 
 const ROLES = ["OWNER", "ADMIN", "AGENT", "VIEWER"];
+const AI_PROVIDERS = ["mock", "openai"];
 
 function Notice({ tone, children }) {
   if (!children) return null;
@@ -68,12 +69,296 @@ function ConfigValue({ ok, children }) {
   );
 }
 
+function CredentialSource({ source }) {
+  const tone = source === "settings" ? "green" : source === "env" ? "indigo" : "amber";
+  return <StatusBadge tone={tone}>{source === "none" ? "not set" : source}</StatusBadge>;
+}
+
+/**
+ * BYOK credentials. Secrets are write-only: a blank field keeps what is stored,
+ * and the API only ever reports whether a value exists and where it came from.
+ */
+function CredentialsCard({ data, isAdmin, onSaved }) {
+  const [draft, setDraft] = useState({});
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState(null);
+  const [notice, setNotice] = useState(null);
+  const [testResult, setTestResult] = useState(null);
+
+  function change(key, value) {
+    setDraft((current) => ({ ...current, [key]: value }));
+  }
+
+  function value(key, fallback = "") {
+    return draft[key] ?? fallback ?? "";
+  }
+
+  async function save(event) {
+    event.preventDefault();
+    setPending(true);
+    setError(null);
+    setNotice(null);
+    setTestResult(null);
+
+    const meta = {
+      graphApiVersion: value("metaGraphApiVersion", data.meta.graphApiVersion),
+      graphApiBaseUrl: value("metaGraphApiBaseUrl", data.meta.graphApiBaseUrl),
+    };
+    const ai = {
+      provider: value("aiProvider", data.ai.provider),
+      baseUrl: value("aiBaseUrl", data.ai.baseUrl),
+      model: value("aiModel", data.ai.model),
+    };
+
+    for (const key of ["metaAccessToken", "metaAppSecret", "metaVerifyToken"]) {
+      if (draft[key]) meta[key] = draft[key];
+    }
+    if (draft.aiApiKey) ai.apiKey = draft.aiApiKey;
+
+    try {
+      await api.patch("/api/settings", { meta, ai });
+      setDraft({});
+      setNotice("Credentials saved.");
+      onSaved();
+    } catch (caught) {
+      setError(caught?.message ?? "Could not save credentials");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function clear(category, field, label) {
+    setPending(true);
+    setError(null);
+    setNotice(null);
+    setTestResult(null);
+    try {
+      await api.patch("/api/settings", { [category]: { [field]: "" } });
+      setNotice(`${label} cleared.`);
+      onSaved();
+    } catch (caught) {
+      setError(caught?.message ?? "Could not clear that credential");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function testAi() {
+    setPending(true);
+    setError(null);
+    setNotice(null);
+    setTestResult(null);
+    try {
+      const result = await api.post("/api/settings/test-ai");
+      setTestResult(result);
+    } catch (caught) {
+      setError(caught?.message ?? "The AI provider rejected the request");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  const secretField = (id, label, hint, key, stored) => (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <Label htmlFor={id}>{label}</Label>
+        <div className="flex items-center gap-1.5">
+          <CredentialSource source={stored ? "settings" : "none"} />
+          {stored && isAdmin ? (
+            <button
+              type="button"
+              className="text-xs font-medium text-muted-foreground underline underline-offset-2"
+              disabled={pending}
+              onClick={() => clear(id.startsWith("meta") ? "meta" : "ai", key, label)}
+            >
+              Clear
+            </button>
+          ) : null}
+        </div>
+      </div>
+      <Input
+        id={id}
+        type="password"
+        autoComplete="off"
+        value={draft[id] ?? ""}
+        onChange={(event) => change(id, event.target.value)}
+        placeholder={stored ? "Stored — leave blank to keep" : "Paste a value"}
+        disabled={!isAdmin}
+      />
+      <p className="text-xs text-muted-foreground">{hint}</p>
+    </div>
+  );
+
+  return (
+    <SectionCard
+      title="API credentials"
+      description="Bring your own keys. Stored encrypted in this organization; the server environment remains the fallback."
+      action={<KeyRound className="size-4 text-muted-foreground" />}
+    >
+      <form className="space-y-5" onSubmit={save}>
+        <div className="grid gap-5 lg:grid-cols-2">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold">WhatsApp / Meta</h3>
+              <CredentialSource
+                source={
+                  data.meta.source.accessToken === "settings" ||
+                  data.meta.source.appSecret === "settings" ||
+                  data.meta.source.verifyToken === "settings"
+                    ? "settings"
+                    : data.meta.source.accessToken === "env" ||
+                        data.meta.source.appSecret === "env" ||
+                        data.meta.source.verifyToken === "env"
+                      ? "env"
+                      : "none"
+                }
+              />
+            </div>
+
+            {secretField(
+              "metaAccessToken",
+              "Access token",
+              "Used by numbers that do not store their own token. Meta → WhatsApp → API setup.",
+              "accessToken",
+              data.meta.stored.accessToken,
+            )}
+            {secretField(
+              "metaAppSecret",
+              "App secret",
+              "Verifies the X-Hub-Signature-256 on every inbound webhook.",
+              "appSecret",
+              data.meta.stored.appSecret,
+            )}
+            {secretField(
+              "metaVerifyToken",
+              "Webhook verify token",
+              "Paste the same value into Meta → WhatsApp → Configuration.",
+              "verifyToken",
+              data.meta.stored.verifyToken,
+            )}
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="meta-version">Graph API version</Label>
+                <Input
+                  id="meta-version"
+                  value={value("metaGraphApiVersion", data.meta.graphApiVersion)}
+                  onChange={(event) => change("metaGraphApiVersion", event.target.value)}
+                  placeholder="v21.0"
+                  disabled={!isAdmin}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="meta-base">Graph API base URL</Label>
+                <Input
+                  id="meta-base"
+                  value={value("metaGraphApiBaseUrl", data.meta.graphApiBaseUrl)}
+                  onChange={(event) => change("metaGraphApiBaseUrl", event.target.value)}
+                  placeholder="https://graph.facebook.com"
+                  disabled={!isAdmin}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold">AI provider</h3>
+              <CredentialSource source={data.ai.source.apiKey} />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="ai-provider">Provider</Label>
+              <Select
+                value={value("aiProvider", data.ai.provider)}
+                onValueChange={(next) => change("aiProvider", next)}
+                disabled={!isAdmin}
+              >
+                <SelectTrigger id="ai-provider" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {AI_PROVIDERS.map((provider) => (
+                    <SelectItem key={provider} value={provider}>
+                      {provider === "mock" ? "Mock (no model call)" : "OpenAI-compatible"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {secretField(
+              "aiApiKey",
+              "API key",
+              "Used for the OpenAI-compatible /chat/completions endpoint.",
+              "apiKey",
+              data.ai.stored.apiKey,
+            )}
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="ai-base">Base URL</Label>
+                <Input
+                  id="ai-base"
+                  value={value("aiBaseUrl", data.ai.baseUrl)}
+                  onChange={(event) => change("aiBaseUrl", event.target.value)}
+                  placeholder="https://api.openai.com/v1"
+                  disabled={!isAdmin}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="ai-model">Model</Label>
+                <Input
+                  id="ai-model"
+                  value={value("aiModel", data.ai.model)}
+                  onChange={(event) => change("aiModel", event.target.value)}
+                  placeholder="gpt-4o-mini"
+                  disabled={!isAdmin}
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" variant="outline" size="sm" disabled={pending} onClick={testAi}>
+                {pending ? <Loader2 className="animate-spin" /> : <Sparkles />}
+                Test AI
+              </Button>
+              {isAdmin ? (
+                <Button type="submit" size="sm" disabled={pending}>
+                  {pending ? <Loader2 className="animate-spin" /> : null}
+                  Save credentials
+                </Button>
+              ) : null}
+            </div>
+
+            {testResult ? (
+              <p className="rounded-lg border bg-muted/40 px-3 py-2 text-xs">
+                <span className="font-semibold">{testResult.provider}</span> · {testResult.model} ·{" "}
+                {testResult.text || "(empty reply)"}
+              </p>
+            ) : null}
+          </div>
+        </div>
+
+        <Notice tone="bad">{error}</Notice>
+        <Notice tone="ok">{notice}</Notice>
+
+        <p className="text-xs leading-5 text-muted-foreground">
+          <span className="font-medium text-foreground">ENCRYPTION_KEY</span> stays server-side: it
+          is what encrypts these values in the database. Everything else can be managed here.
+        </p>
+      </form>
+    </SectionCard>
+  );
+}
+
 export default function SettingsPage() {
   const { user, isAdmin, changePassword } = useAuth();
   const organization = useResource("/api/organizations");
   const team = useResource("/api/organizations/users");
   const ai = useResource("/api/ai-agents");
   const webhook = useResource("/api/whatsapp/webhook-status");
+  const credentials = useResource("/api/settings");
 
   const [orgNameDraft, setOrgNameDraft] = useState(null);
   const [member, setMember] = useState({ name: "", email: "", password: "", role: "AGENT" });
@@ -146,7 +431,7 @@ export default function SettingsPage() {
     }
   }
 
-  const provider = ai.data?.provider ?? "mock";
+  const provider = credentials.data?.ai.provider ?? ai.data?.provider ?? "mock";
   const members = team.data?.members ?? [];
 
   return (
@@ -158,6 +443,28 @@ export default function SettingsPage() {
 
       <Notice tone="bad">{error}</Notice>
       <Notice tone="ok">{notice}</Notice>
+
+      {credentials.data ? (
+        <CredentialsCard
+          data={credentials.data}
+          isAdmin={isAdmin}
+          onSaved={() => {
+            credentials.reload();
+            webhook.reload();
+            ai.reload();
+          }}
+        />
+      ) : (
+        <SectionCard title="API credentials" description="Loading stored configuration">
+          <div className="space-y-3">
+            <Skeleton className="h-9 w-full" />
+            <Skeleton className="h-9 w-full" />
+            <Skeleton className="h-9 w-2/3" />
+          </div>
+        </SectionCard>
+      )}
+
+      <ErrorAlert error={credentials.error} />
 
       <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-5 lg:grid-cols-2">
         <div className="space-y-5">
@@ -250,41 +557,53 @@ export default function SettingsPage() {
             </form>
           </SectionCard>
 
-          <SectionCard title="Server configuration" description="Read from the server environment">
+          <SectionCard
+            title="Effective configuration"
+            description="What the backend will actually use, after settings and env fallbacks"
+          >
             <dl className="space-y-2.5 text-sm">
               <div className="flex items-center justify-between gap-4">
                 <dt className="text-muted-foreground">AI provider</dt>
                 <dd>
-                  <StatusBadge tone={provider === "mock" ? "amber" : "green"}>
-                    {provider}
-                    {provider === "mock" ? " · set AI_API_KEY" : ""}
-                  </StatusBadge>
+                  <StatusBadge tone={provider === "mock" ? "amber" : "green"}>{provider}</StatusBadge>
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <dt className="text-muted-foreground">AI API key</dt>
+                <dd>
+                  <CredentialSource source={credentials.data?.ai.source.apiKey ?? "none"} />
                 </dd>
               </div>
               <div className="flex items-center justify-between gap-4">
                 <dt className="text-muted-foreground">Webhook verify token</dt>
                 <dd>
-                  <ConfigValue ok={webhook.data?.verifyTokenConfigured}>
-                    {webhook.data?.verifyTokenConfigured ? "configured" : "missing"}
-                  </ConfigValue>
+                  <CredentialSource source={credentials.data?.meta.source.verifyToken ?? "none"} />
                 </dd>
               </div>
               <div className="flex items-center justify-between gap-4">
                 <dt className="text-muted-foreground">Meta app secret</dt>
                 <dd>
-                  <ConfigValue ok={webhook.data?.appSecretConfigured}>
-                    {webhook.data?.appSecretConfigured ? "configured" : "missing"}
-                  </ConfigValue>
+                  <CredentialSource source={credentials.data?.meta.source.appSecret ?? "none"} />
                 </dd>
               </div>
               <div className="flex items-center justify-between gap-4">
-                <dt className="text-muted-foreground">Session secret</dt>
-                <dd className="text-xs text-muted-foreground">AUTH_SECRET or ENCRYPTION_KEY</dd>
+                <dt className="text-muted-foreground">Access token</dt>
+                <dd>
+                  <CredentialSource source={credentials.data?.meta.source.accessToken ?? "none"} />
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <dt className="text-muted-foreground">Encryption key</dt>
+                <dd>
+                  <ConfigValue ok={credentials.data?.server.encryptionKeyConfigured}>
+                    {credentials.data?.server.encryptionKeyConfigured ? "configured" : "missing"}
+                  </ConfigValue>
+                </dd>
               </div>
             </dl>
             <p className="mt-3 text-xs leading-5 text-muted-foreground">
-              These live in <span className="font-mono">server/.env</span>. Meta credentials can
-              also be pasted per number on the WhatsApp page, where they are encrypted at rest.
+              Values saved above win over <span className="font-mono">server/.env</span>. A number
+              can still carry its own token on the WhatsApp page, which wins over both.
             </p>
           </SectionCard>
         </div>
