@@ -92,10 +92,39 @@ export default function WhatsAppPage() {
     components: "",
   });
   const [testResult, setTestResult] = useState(null);
+  const [templates, setTemplates] = useState([]);
+  const [templatesFor, setTemplatesFor] = useState(null);
+  const [templatesPending, setTemplatesPending] = useState(false);
+  const [templatesError, setTemplatesError] = useState(null);
 
   const list = numbers.data?.phoneNumbers ?? [];
   const callbackUrl = `${API_URL}/api/webhooks/whatsapp`;
   const numberId = test.numberId || list[0]?.id || "";
+  const selectedNumber = list.find((row) => row.id === numberId) ?? null;
+  const templatesLoaded =
+    Boolean(templatesFor) && templatesFor === selectedNumber?.phoneNumberId;
+
+  async function loadTemplates() {
+    if (!selectedNumber) return;
+    setTemplatesPending(true);
+    setTemplatesError(null);
+    try {
+      const result = await api.get(
+        `/api/whatsapp/templates?phoneNumberId=${encodeURIComponent(selectedNumber.phoneNumberId)}`,
+      );
+      setTemplates(result.templates ?? []);
+      setTemplatesFor(selectedNumber.phoneNumberId);
+      if ((result.templates ?? []).length === 0) {
+        setTemplatesError("Meta returned no templates for this WABA.");
+      }
+    } catch (caught) {
+      setTemplates([]);
+      setTemplatesFor(null);
+      setTemplatesError(caught?.message ?? "Could not load templates from Meta");
+    } finally {
+      setTemplatesPending(false);
+    }
+  }
 
   function refreshAll() {
     numbers.reload();
@@ -680,6 +709,66 @@ export default function WhatsAppPage() {
 
               {test.type === "template" ? (
                 <>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label htmlFor="test-template-pick">Approved template</Label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={templatesPending || !selectedNumber}
+                        onClick={loadTemplates}
+                      >
+                        {templatesPending ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+                        {templatesLoaded ? "Reload from Meta" : "Load from Meta"}
+                      </Button>
+                    </div>
+                    {templatesLoaded && templates.length > 0 ? (
+                      <Select
+                        value={`${test.templateName}:${test.templateLanguage}`}
+                        onValueChange={(value) => {
+                          const picked = templates.find(
+                            (template) =>
+                              `${template.name}:${template.language}` === value,
+                          );
+                          if (picked) {
+                            setTest((current) => ({
+                              ...current,
+                              templateName: picked.name,
+                              templateLanguage: picked.language,
+                            }));
+                          }
+                        }}
+                      >
+                        <SelectTrigger id="test-template-pick" className="w-full">
+                          <SelectValue placeholder="Choose a template" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {templates.map((template) => (
+                            <SelectItem
+                              key={`${template.name}:${template.language}`}
+                              value={`${template.name}:${template.language}`}
+                            >
+                              {template.name} · {template.language} ·{" "}
+                              {template.category ?? "uncategorised"} · {template.status ?? "unknown"}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        Templates live on Meta. Load them for the WABA attached to this number,
+                        or type the name and language by hand.
+                      </p>
+                    )}
+                    {templatesError ? (
+                      <p className="flex items-start gap-1.5 text-xs text-rose-700 dark:text-rose-300">
+                        <CircleAlert className="mt-0.5 size-3.5 shrink-0" />
+                        {templatesError}
+                      </p>
+                    ) : null}
+                  </div>
+
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-1.5">
                       <Label htmlFor="test-template">Template name</Label>

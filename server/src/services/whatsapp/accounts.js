@@ -286,17 +286,33 @@ export async function verifyPhoneNumber({ organizationId, id, req = null }) {
  * Approved message templates for the account's WABA. Templates only exist on
  * Meta; simulator numbers return an empty list.
  */
-export async function listApprovedTemplates({ organizationId, wabaId = null }) {
-  const account = await prisma.whatsAppAccount.findFirst({
-    where: {
-      organizationId,
-      ...(wabaId ? { wabaId } : { wabaId: { not: null } }),
-    },
-    orderBy: { createdAt: "asc" },
-  });
+export async function listApprovedTemplates({ organizationId, wabaId = null, phoneNumberId = null }) {
+  let account = null;
+
+  if (phoneNumberId) {
+    const number = await prisma.whatsAppPhoneNumber.findFirst({
+      where: {
+        organizationId,
+        OR: [{ id: phoneNumberId }, { phoneNumberId }],
+      },
+      include: { whatsappAccount: true },
+    });
+    if (!number) throw new NotFoundError("WhatsApp phone number not found");
+    account = number.whatsappAccount;
+  } else {
+    account = await prisma.whatsAppAccount.findFirst({
+      where: {
+        organizationId,
+        ...(wabaId ? { wabaId } : { wabaId: { not: null } }),
+      },
+      orderBy: { createdAt: "asc" },
+    });
+  }
 
   if (!account?.wabaId) {
-    throw new ValidationError("Add a WABA id to a WhatsApp account before loading templates");
+    throw new ValidationError(
+      "Add a WABA id to this WhatsApp number before loading templates",
+    );
   }
 
   const token = await resolveAccessTokenForAccount(account);
@@ -313,14 +329,16 @@ export async function listApprovedTemplates({ organizationId, wabaId = null }) {
 
   return {
     wabaId: account.wabaId,
-    templates: (response?.data ?? []).map((template) => ({
-      id: template.id,
-      name: template.name,
-      status: template.status,
-      category: template.category,
-      language: template.language,
-      components: template.components ?? [],
-    })),
+    templates: (response?.data ?? [])
+      .filter((template) => String(template.status ?? "").toUpperCase() === "APPROVED")
+      .map((template) => ({
+        id: template.id,
+        name: template.name,
+        status: template.status,
+        category: template.category,
+        language: template.language,
+        components: template.components ?? [],
+      })),
   };
 }
 

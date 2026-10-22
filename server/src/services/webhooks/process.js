@@ -126,6 +126,13 @@ async function processChange({ phoneNumber, value }) {
   return processed;
 }
 
+function previewFor(normalized) {
+  if (normalized.text) return normalized.text;
+  if (normalized.media?.caption) return normalized.media.caption;
+  if (normalized.media?.filename) return normalized.media.filename;
+  return `[${normalized.type}]`;
+}
+
 export async function processInboundMessage({ phoneNumber, message, contacts }) {
   const organizationId = phoneNumber.organizationId;
 
@@ -165,7 +172,7 @@ export async function processInboundMessage({ phoneNumber, message, contacts }) 
   }
 
   await recordConversationActivity(conversation.id, {
-    preview: normalized.text,
+    preview: previewFor(normalized),
     at: normalized.timestamp,
     incrementUnread: true,
   });

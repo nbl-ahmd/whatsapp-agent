@@ -3,8 +3,10 @@
 Multi-tenant WhatsApp automation platform built on the Meta WhatsApp Cloud API.
 See [AGENTS.md](./AGENTS.md) for the domain architecture and phased plan.
 
-Current status: **Phase 2 - WhatsApp Cloud API, webhooks and messaging**, now
-split into a **Next.js frontend** and a **standalone Node/Express backend**.
+Current status: **Phases 1–5 complete** — multi-tenant auth, WhatsApp Cloud API
+send/receive with inbound media, contacts/conversations/inbox, the automation
+engine, and a provider-neutral AI agent with tools. The app is split into a
+**Next.js frontend** and a **standalone Node/Express backend**.
 
 ## Architecture
 
@@ -35,9 +37,9 @@ split into a **Next.js frontend** and a **standalone Node/Express backend**.
 ```text
 src/                       Next.js frontend (Vercel)
   app/                       dashboard pages (no API routes)
-  components/                UI components (SidebarNav, BackendStatus, ...)
-  config/                    navigation + module display metadata
-  lib/api.js                 centralized backend API client
+  components/                AppShell, auth gate/provider, shared UI primitives
+  config/navigation.js       primary navigation
+  lib/api.js                 centralized backend API client (+ authenticated media blobs)
 server/                    Express backend (Render)
   src/
     server.js                entrypoint (binds PORT)
@@ -127,7 +129,7 @@ No secret is ever prefixed with `NEXT_PUBLIC_`.
 | `npm run build` | Next.js production build (Vercel) |
 | `npm start` | Backend production server (Render) |
 | `npm run start:web` | Next.js production server |
-| `npm run lint` | ESLint (frontend + backend) |
+| `npm run lint` | ESLint (frontend) |
 | `npm test` | Test suite (node:test) |
 | `npm run db:generate` / `db:validate` / `db:push` / `db:migrate` / `db:deploy` / `db:seed` / `db:studio` | Prisma tasks |
 
@@ -138,7 +140,9 @@ No secret is ever prefixed with `NEXT_PUBLIC_`.
 | `GET` | `/health` | Render health check - returns `{ "status": "ok" }` |
 | `GET` | `/api/webhooks/whatsapp` | Meta verification handshake |
 | `POST` | `/api/webhooks/whatsapp` | Meta inbound events (idempotent) |
-| `POST` | `/api/whatsapp/messages` | Send a text message (guarded by `WHATSAPP_TEST_API_KEY`) |
+| `POST` | `/api/whatsapp/messages` | Send text/image/document/template/interactive (session or `WHATSAPP_TEST_API_KEY`) |
+| `GET` | `/api/whatsapp/templates?phoneNumberId=…` | Approved templates for the number's WABA |
+| `GET` | `/api/whatsapp/media/:messageId` | Stream inbound media using the tenant's Meta token |
 
 Send a test message:
 
@@ -193,9 +197,11 @@ encrypted at rest with `server/src/lib/crypto.js` (`ENCRYPTION_KEY`).
 ## Security notes
 
 - Browser origins allowed by CORS come from `FRONTEND_URL`; no wildcard.
-- Meta/DB/AI secrets live only in the backend environment.
+- Meta/DB/AI secrets live only in the backend; BYOK credentials are AES-GCM
+  encrypted at rest and returned to the browser only as "configured" flags.
 - `WHATSAPP_APP_SECRET` enables webhook HMAC verification; when unset the
   backend logs a warning and skips it (always set it in production).
-- User sessions/tenant auth are not implemented yet. `POST /api/whatsapp/messages`
-  is protected by the shared `WHATSAPP_TEST_API_KEY` (server-to-server) and is
-  disabled in production when unset.
+- Tenant identity comes from the bearer session token, never from a browser-sent
+  organization id. `POST /api/whatsapp/messages` also accepts a server-to-server
+  caller holding `WHATSAPP_TEST_API_KEY`; the shared key path is disabled in
+  production when unset.

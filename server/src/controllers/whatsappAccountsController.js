@@ -57,6 +57,7 @@ export async function templates(req, res) {
   const result = await listApprovedTemplates({
     organizationId: req.auth.organizationId,
     wabaId: asString(req.query.wabaId, "wabaId", { max: 64 }),
+    phoneNumberId: asString(req.query.phoneNumberId, "phoneNumberId", { max: 64 }),
   });
   return ok(res, result);
 }

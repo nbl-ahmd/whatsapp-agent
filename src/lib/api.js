@@ -70,9 +70,40 @@ export async function apiFetch(path, { method = "GET", body, headers, auth = tru
   return data && typeof data === "object" && "data" in data ? data.data : data;
 }
 
+/**
+ * Fetch a binary response (inbound WhatsApp media). Uses the same bearer token
+ * as JSON calls, so media can stay behind authentication without exposing the
+ * Meta access token.
+ *
+ * @param {string} path
+ * @returns {Promise<Blob>}
+ */
+export async function apiBlob(path) {
+  const token = getToken();
+  const response = await fetch(apiUrl(path), {
+    headers: token ? { authorization: `Bearer ${token}` } : {},
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) clearSession();
+
+    let message = `Request failed (${response.status})`;
+    try {
+      const data = await response.json();
+      message = data?.error?.message || message;
+    } catch {
+      /* the body may not be JSON (e.g. a stream error) */
+    }
+    throw new ApiError(message, { status: response.status });
+  }
+
+  return response.blob();
+}
+
 export const api = {
   get: (path, options) => apiFetch(path, { ...options, method: "GET" }),
   post: (path, body, options) => apiFetch(path, { ...options, method: "POST", body }),
   patch: (path, body, options) => apiFetch(path, { ...options, method: "PATCH", body }),
   del: (path, options) => apiFetch(path, { ...options, method: "DELETE" }),
+  blob: (path) => apiBlob(path),
 };

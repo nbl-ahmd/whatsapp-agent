@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Bot,
@@ -18,6 +18,7 @@ import {
   Paperclip,
   AtSign,
   FileText,
+  RefreshCw,
   Search,
   Sparkles,
   X,
@@ -84,8 +85,13 @@ export default function InboxPage() {
   const [messagesFor, setMessagesFor] = useState(null);
   const [draft, setDraft] = useState("");
   const [attachment, setAttachment] = useState(null);
+  const [templates, setTemplates] = useState([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [templatesError, setTemplatesError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const threadRef = useRef(null);
+  const stickToBottom = useRef(true);
 
   const list = useResource("/api/conversations?limit=60", { refreshMs: 15000 });
   const conversations = useMemo(() => list.data?.conversations ?? [], [list.data]);
@@ -130,6 +136,33 @@ export default function InboxPage() {
     return undefined;
   }, [activeId, loadThread]);
 
+  // Keep the open thread live while an operator is looking at it. The list
+  // already refreshes; without this the thread would only update on reply.
+  useEffect(() => {
+    if (!activeId) return undefined;
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") loadThread(activeId);
+    }, 10000);
+    return () => clearInterval(timer);
+  }, [activeId, loadThread]);
+
+  // A chat should open at the newest message, and stay pinned there unless the
+  // operator has scrolled up to read history.
+  useEffect(() => {
+    stickToBottom.current = true;
+  }, [activeId]);
+
+  useEffect(() => {
+    const element = threadRef.current;
+    if (element && stickToBottom.current) element.scrollTop = element.scrollHeight;
+  }, [activeId, messages.length, messagesFor]);
+
+  function trackScroll(event) {
+    const element = event.currentTarget;
+    stickToBottom.current =
+      element.scrollHeight - element.scrollTop - element.clientHeight < 64;
+  }
+
   const act = useCallback(
     async (path, body) => {
       setBusy(true);
@@ -147,25 +180,86 @@ export default function InboxPage() {
     [list, loadThread, activeId],
   );
 
+  async function loadTemplatesFor(phoneNumberId) {
+    if (!phoneNumberId) return;
+    setTemplatesLoading(true);
+    setTemplatesError(null);
+    setTemplates([]);
+    try {
+      const result = await api.get(
+        `/api/whatsapp/templates?phoneNumberId=${encodeURIComponent(phoneNumberId)}`,
+      );
+      setTemplates(result.templates ?? []);
+      if ((result.templates ?? []).length === 0) {
+        setTemplatesError("Meta returned no templates for this WABA.");
+      }
+    } catch (caught) {
+      setTemplates([]);
+      setTemplatesError(caught?.message ?? "Could not load templates");
+    } finally {
+      setTemplatesLoading(false);
+    }
+  }
+
+  function chooseAttachmentType(next) {
+    setAttachment({
+      type: next,
+      link: "",
+      filename: "",
+      name: "",
+      language: "en_US",
+      components: "",
+    });
+    if (next === "template" && selected?.phoneNumberId) {
+      loadTemplatesFor(selected.phoneNumberId);
+    }
+  }
+
   async function sendReply(event) {
     event.preventDefault();
+    if (!activeId) return;
+
     const text = draft.trim();
-    const hasAttachment = Boolean(attachment?.link?.trim());
-    if ((!text && !hasAttachment) || !activeId) return;
+    const isTemplate = attachment?.type === "template";
+    const hasMedia = Boolean(attachment && !isTemplate && attachment.link?.trim());
+    const hasTemplate = Boolean(isTemplate && attachment.name?.trim());
+
+    if (!hasMedia && !hasTemplate && !text) return;
+    if (attachment && !hasMedia && !hasTemplate) return;
+
+    let components;
+    if (isTemplate && attachment.components?.trim()) {
+      try {
+        components = JSON.parse(attachment.components);
+      } catch {
+        setError("Template components must be valid JSON");
+        return;
+      }
+    }
 
     setBusy(true);
     setError(null);
     try {
-      const payload = hasAttachment
+      const payload = isTemplate
         ? {
-            type: attachment.type,
-            media: {
-              link: attachment.link.trim(),
-              caption: text || undefined,
-              filename: attachment.filename?.trim() || undefined,
+            type: "template",
+            template: {
+              name: attachment.name.trim(),
+              language: attachment.language?.trim() || "en_US",
+              ...(components ? { components } : {}),
             },
           }
-        : { type: "text", text };
+        : hasMedia
+          ? {
+              type: attachment.type,
+              media: {
+                link: attachment.link.trim(),
+                caption: text || undefined,
+                filename: attachment.filename?.trim() || undefined,
+              },
+            }
+          : { type: "text", text };
+
       const result = await api.post(`/api/conversations/${activeId}/messages`, payload);
       setDraft("");
       setAttachment(null);
@@ -189,15 +283,11 @@ export default function InboxPage() {
   const threadLoading = Boolean(activeId) && messagesFor !== activeId;
   const openCount = counts[1] + counts[2] + counts[3];
 
-  const history = useMemo(
-    () =>
-      selected
-        ? conversations.filter(
-            (row) => row.contactId === selected.contactId && row.id !== selected.id,
-          )
-        : [],
-    [conversations, selected],
-  );
+  const history = selected
+    ? conversations.filter(
+        (row) => row.contactId === selected.contactId && row.id !== selected.id,
+      )
+    : [];
 
   const grouped = useMemo(() => {
     const byDay = [];
@@ -212,6 +302,11 @@ export default function InboxPage() {
 
   const showList = !narrow || !selected;
   const showThread = !narrow || Boolean(selected);
+  const canSend = attachment
+    ? attachment.type === "template"
+      ? Boolean(attachment.name?.trim())
+      : Boolean(attachment.link?.trim())
+    : Boolean(draft.trim());
 
   return (
     <div className="space-y-3">
@@ -393,7 +488,11 @@ export default function InboxPage() {
                   </div>
                 ) : null}
 
-                <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
+                <div
+                  ref={threadRef}
+                  onScroll={trackScroll}
+                  className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4"
+                >
                   {threadLoading ? (
                     <div className="space-y-3">
                       <Skeleton className="h-16 w-2/3 rounded-2xl" />
@@ -434,84 +533,193 @@ export default function InboxPage() {
 
                   <form onSubmit={sendReply} className="space-y-2 p-3">
                     {attachment ? (
-                      <div className="grid gap-2 rounded-lg border bg-muted/30 p-2.5 sm:grid-cols-[130px_minmax(0,1fr)]">
-                        <div className="space-y-1">
-                          <Label htmlFor="attach-type" className="text-xs">
-                            Attachment
-                          </Label>
-                          <Select
-                            value={attachment.type}
-                            onValueChange={(next) => setAttachment({ ...attachment, type: next })}
-                          >
-                            <SelectTrigger id="attach-type" size="sm" className="w-full">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="image">Image</SelectItem>
-                              <SelectItem value="document">Document</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-1">
-                          <Label htmlFor="attach-link" className="text-xs">
-                            Media URL
-                          </Label>
-                          <div className="flex gap-2">
-                            <Input
-                              id="attach-link"
-                              value={attachment.link}
-                              onChange={(event) =>
-                                setAttachment({ ...attachment, link: event.target.value })
-                              }
-                              placeholder="https://cdn.example.com/file.jpg"
-                            />
-                            {attachment.type === "document" ? (
-                              <Input
-                                value={attachment.filename}
-                                onChange={(event) =>
-                                  setAttachment({ ...attachment, filename: event.target.value })
-                                }
-                                placeholder="filename.pdf"
-                                className="w-[150px]"
-                              />
-                            ) : null}
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-sm"
-                              aria-label="Remove attachment"
-                              onClick={() => setAttachment(null)}
-                            >
-                              <X />
-                            </Button>
+                      <div className="space-y-2 rounded-lg border bg-muted/30 p-2.5">
+                        <div className="flex flex-wrap items-end gap-2">
+                          <div className="w-[140px] space-y-1">
+                            <Label htmlFor="attach-type" className="text-xs">
+                              Attachment
+                            </Label>
+                            <Select value={attachment.type} onValueChange={chooseAttachmentType}>
+                              <SelectTrigger id="attach-type" size="sm" className="w-full">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="image">Image</SelectItem>
+                                <SelectItem value="document">Document</SelectItem>
+                                <SelectItem value="template">Template</SelectItem>
+                              </SelectContent>
+                            </Select>
                           </div>
+
+                          {attachment.type === "template" ? (
+                            <p className="flex-1 pb-1 text-xs text-muted-foreground">
+                              Approved templates can be sent outside the 24-hour service window.
+                            </p>
+                          ) : (
+                            <div className="min-w-[220px] flex-1 space-y-1">
+                              <Label htmlFor="attach-link" className="text-xs">
+                                Media URL
+                              </Label>
+                              <div className="flex gap-2">
+                                <Input
+                                  id="attach-link"
+                                  value={attachment.link}
+                                  onChange={(event) =>
+                                    setAttachment({ ...attachment, link: event.target.value })
+                                  }
+                                  placeholder="https://cdn.example.com/file.jpg"
+                                />
+                                {attachment.type === "document" ? (
+                                  <Input
+                                    value={attachment.filename}
+                                    onChange={(event) =>
+                                      setAttachment({ ...attachment, filename: event.target.value })
+                                    }
+                                    placeholder="filename.pdf"
+                                    className="w-[150px]"
+                                  />
+                                ) : null}
+                              </div>
+                            </div>
+                          )}
+
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label="Remove attachment"
+                            onClick={() => setAttachment(null)}
+                          >
+                            <X />
+                          </Button>
                         </div>
+
+                        {attachment.type === "template" ? (
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between gap-2">
+                                <Label htmlFor="attach-template" className="text-xs">
+                                  Template
+                                </Label>
+                                <button
+                                  type="button"
+                                  className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                                  disabled={templatesLoading}
+                                  onClick={() => loadTemplatesFor(selected.phoneNumberId)}
+                                >
+                                  <RefreshCw
+                                    className={`size-3 ${templatesLoading ? "animate-spin" : ""}`}
+                                  />
+                                  {templatesLoading ? "Loading" : "Reload"}
+                                </button>
+                              </div>
+                              {templates.length > 0 ? (
+                                <Select
+                                  value={`${attachment.name}:${attachment.language}`}
+                                  onValueChange={(value) => {
+                                    const picked = templates.find(
+                                      (template) =>
+                                        `${template.name}:${template.language}` === value,
+                                    );
+                                    if (picked) {
+                                      setAttachment({
+                                        ...attachment,
+                                        name: picked.name,
+                                        language: picked.language,
+                                      });
+                                    }
+                                  }}
+                                >
+                                  <SelectTrigger id="attach-template" size="sm" className="w-full">
+                                    <SelectValue placeholder="Choose a template" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {templates.map((template) => (
+                                      <SelectItem
+                                        key={`${template.name}:${template.language}`}
+                                        value={`${template.name}:${template.language}`}
+                                      >
+                                        {template.name} · {template.language} ·{" "}
+                                        {template.status ?? "unknown"}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <Input
+                                  id="attach-template"
+                                  value={attachment.name}
+                                  onChange={(event) =>
+                                    setAttachment({ ...attachment, name: event.target.value })
+                                  }
+                                  placeholder="order_update"
+                                />
+                              )}
+                              {templatesError ? (
+                                <p className="text-xs text-rose-700 dark:text-rose-300">
+                                  {templatesError}
+                                </p>
+                              ) : null}
+                            </div>
+
+                            <div className="space-y-1">
+                              <Label htmlFor="attach-template-language" className="text-xs">
+                                Language
+                              </Label>
+                              <Input
+                                id="attach-template-language"
+                                value={attachment.language}
+                                onChange={(event) =>
+                                  setAttachment({ ...attachment, language: event.target.value })
+                                }
+                                placeholder="en_US"
+                              />
+                            </div>
+
+                            <div className="space-y-1 sm:col-span-2">
+                              <Label htmlFor="attach-components" className="text-xs">
+                                Components JSON (optional)
+                              </Label>
+                              <Textarea
+                                id="attach-components"
+                                value={attachment.components}
+                                onChange={(event) =>
+                                  setAttachment({ ...attachment, components: event.target.value })
+                                }
+                                placeholder='[{"type":"body","parameters":[{"type":"text","text":"Ada"}]}]'
+                                className="min-h-16 font-mono text-xs"
+                              />
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                     ) : null}
 
-                    <Textarea
-                      value={draft}
-                      onChange={(event) => setDraft(event.target.value)}
-                      onKeyDown={(event) => {
-                        if ((event.metaKey || event.ctrlKey) && event.key === "Enter") sendReply(event);
-                      }}
-                      placeholder={
-                        attachment
-                          ? "Add a caption (optional)…"
-                          : `Reply as ${user?.name ?? "operator"}…`
-                      }
-                      className="min-h-20 resize-none"
-                    />
+                    {attachment?.type !== "template" ? (
+                      <Textarea
+                        value={draft}
+                        onChange={(event) => setDraft(event.target.value)}
+                        onKeyDown={(event) => {
+                          if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                            sendReply(event);
+                          }
+                        }}
+                        placeholder={
+                          attachment
+                            ? "Add a caption (optional)…"
+                            : `Reply as ${user?.name ?? "operator"}…`
+                        }
+                        className="min-h-20 resize-none"
+                      />
+                    ) : null}
                     <div className="flex items-center gap-1">
                       <Button
                         type="button"
                         variant={attachment ? "secondary" : "ghost"}
                         size="icon-sm"
-                        aria-label="Attach image or document"
+                        aria-label="Attach image, document or template"
                         onClick={() =>
-                          setAttachment(
-                            attachment ? null : { type: "image", link: "", filename: "" },
-                          )
+                          attachment ? setAttachment(null) : chooseAttachmentType("image")
                         }
                       >
                         <Paperclip />
@@ -529,7 +737,7 @@ export default function InboxPage() {
                         type="submit"
                         size="sm"
                         className="ml-auto"
-                        disabled={busy || (!attachment?.link?.trim() && !draft.trim())}
+                        disabled={busy || !canSend}
                       >
                         <Send />
                         {busy ? "Sending…" : "Send"}
@@ -707,6 +915,103 @@ function DetailRow({ icon: Icon, label, value }) {
   );
 }
 
+function hasMedia(message) {
+  const media = message.media;
+  return Boolean(
+    media &&
+      typeof media === "object" &&
+      (typeof media.id === "string" || typeof media.link === "string"),
+  );
+}
+
+/**
+ * Renders inbound media through the authenticated proxy (Meta media ids expire
+ * and the bytes require the tenant's token). Outbound media already stores the
+ * public link that was sent.
+ */
+function MessageMedia({ message, mediaLink }) {
+  const inboundId =
+    message.direction === "inbound" && typeof message.media?.id === "string"
+      ? message.media.id
+      : null;
+  const [url, setUrl] = useState(mediaLink || null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (mediaLink || !inboundId) return undefined;
+
+    let cancelled = false;
+    let objectUrl = null;
+
+    api
+      .blob(`/api/whatsapp/media/${message.id}`)
+      .then((blob) => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setUrl(objectUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [inboundId, mediaLink, message.id]);
+
+  if (failed) {
+    return (
+      <p className="text-xs opacity-80">
+        {message.type === "document" ? "Document" : titleCase(message.type)} unavailable — the
+        media may have expired.
+      </p>
+    );
+  }
+
+  if (!url) return <Skeleton className="h-32 w-48 rounded-lg" />;
+
+  const filename = message.media?.filename || "Document";
+  const caption = message.media?.caption || message.text || "";
+
+  if (message.type === "image" || message.type === "sticker") {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={url}
+        alt={caption || "Image attachment"}
+        loading="lazy"
+        className="max-h-64 rounded-lg object-contain"
+      />
+    );
+  }
+
+  if (message.type === "video") {
+    return <video src={url} controls className="max-h-64 rounded-lg" />;
+  }
+
+  if (message.type === "audio") {
+    return <audio src={url} controls className="w-full min-w-52" />;
+  }
+
+  if (message.type === "document") {
+    return (
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        download={filename}
+        className="flex items-center gap-2 underline underline-offset-2"
+      >
+        <FileText className="size-4 shrink-0" />
+        {filename}
+      </a>
+    );
+  }
+
+  return null;
+}
+
 function MessageBubble({ message }) {
   const outbound = message.direction === "outbound";
   const media = message.media ?? null;
@@ -728,30 +1033,13 @@ function MessageBubble({ message }) {
               : "rounded-bl-md border bg-card"
           }`}
         >
-          {message.type === "image" && mediaLink ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={mediaLink}
-              alt={media?.caption || "Image attachment"}
-              className="max-h-64 rounded-lg object-contain"
-            />
-          ) : null}
-
-          {message.type === "document" && mediaLink ? (
-            <a
-              href={mediaLink}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-2 underline underline-offset-2"
-            >
-              <FileText className="size-4 shrink-0" />
-              {media?.filename || "Document"}
-            </a>
+          {["image", "sticker", "video", "audio", "document"].includes(message.type) ? (
+            <MessageMedia message={message} mediaLink={mediaLink} />
           ) : null}
 
           {caption ? <p className="whitespace-pre-wrap">{caption}</p> : null}
 
-          {!caption && !mediaLink ? (
+          {!caption && !mediaLink && !hasMedia(message) ? (
             <p className="opacity-80">[{message.type} message]</p>
           ) : null}
 

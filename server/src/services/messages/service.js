@@ -126,10 +126,28 @@ export async function updateMessageStatusByExternalId({
   });
 }
 
-export function listConversationMessages({ organizationId, conversationId, take = 50 }) {
-  return prisma.message.findMany({
-    where: { organizationId, conversationId },
-    orderBy: { timestamp: "asc" },
+/**
+ * Newest N messages for a thread, returned oldest-first for rendering.
+ *
+ * Querying ascending with a limit would return the *oldest* page, so a long
+ * conversation would never show the latest reply. Fetch descending, then
+ * reverse the page.
+ */
+export async function listConversationMessages({
+  organizationId,
+  conversationId,
+  take = 50,
+  before = null,
+}) {
+  const rows = await prisma.message.findMany({
+    where: {
+      organizationId,
+      conversationId,
+      ...(before ? { timestamp: { lt: before } } : {}),
+    },
+    orderBy: { timestamp: "desc" },
     take,
   });
+
+  return rows.reverse();
 }

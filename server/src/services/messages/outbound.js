@@ -102,7 +102,11 @@ async function deliver({
 
     const sent = await markMessageSent(message.id, externalMessageId);
     await recordConversationActivity(conversation.id, {
-      preview: text ?? (template ? `Template: ${template.name}` : undefined),
+      preview:
+        text ??
+        media?.caption ??
+        media?.filename ??
+        (template ? `Template: ${template.name}` : `[${type}]`),
       at: new Date(),
       resetUnread: true,
     });

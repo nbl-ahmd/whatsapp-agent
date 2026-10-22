@@ -5,7 +5,7 @@ Handoff for a fresh session. Read this first, then `AGENTS.md` (rules + phases),
 file is for *state*: what exists, what is verified, what is next. The history of
 completed work is in `CHECKPOINTS.md`.
 
-Last updated: 2026-10-20.
+Last updated: 2026-10-22.
 
 ---
 
@@ -48,7 +48,7 @@ npm run dev:api          # Express API on http://localhost:4000
 # verify before moving on
 npm run lint             # eslint src  (must be clean)
 npm run build            # next build  (must pass)
-npm test                 # node --test, server/tests  (currently 51 pass)
+npm test                 # node --test, server/tests  (currently 62 pass)
 ```
 
 **Demo logins** (from `server/prisma/seed.mjs`; password is the same for all):
@@ -68,15 +68,16 @@ API is down, start it with `npm run dev:api`. The web app runs with `npm run dev
 
 ---
 
-## 3. Verified state (2026-10-20, WhatsApp messaging + BYOK)
+## 3. Verified state (2026-10-22, inbound media + chat + templates)
 
 - `npm run lint` → clean.
 - `npm run build` → succeeds; all 12 routes prerender.
-- `npm test` → **58/58** pass (auth, automation, crypto, database integration, messaging,
+- `npm test` → **62/62** pass (auth, automation, crypto, database integration, messaging,
   pipeline integration, http, tenant scoping, tools, settings, whatsapp
-  normalize/verify/integration).
-- Manual HTTP E2E on a throwaway org: save credentials → webhook handshake with
-  the stored verify token → test AI → send image and template → document reply.
+  normalize/verify/integration, media proxy).
+- Manual HTTP E2E on throwaway orgs: text send → conversation → reply; template
+  send; media proxy rejects a text message with a clear 404; template listing on a
+  simulator number fails with a validation error (no WABA). Tenants cleaned up.
 - `impeccable detect` → **0 findings** on `/login` at 1280×800 and 390×844, and on
   `src` (last run 2026-10-19; UI changes since are form-only).
 - In-page audit of all nine authenticated routes (viewport 1000px, 2026-10-19): no
@@ -96,7 +97,7 @@ are committed in four logical commits (see `CHECKPOINTS.md`, 2026-10-20).
 | 0 Project init | done |
 | 1 DB + multi-tenancy | done — org scoping via `server/src/lib/tenant.js`, auth middleware in `server/src/middleware/auth.js`, every query tenant-scoped |
 | 2 WhatsApp Cloud API + webhook | done — verify/signature, persist raw event, idempotent processing, send/receive, simulator provider; outbound text/image/document/template/interactive; inbound media is metadata only |
-| 3 Contacts, conversations, messages, inbox | done — services + controllers + the web app pages; inbox supports image/document attachments |
+| 3 Contacts, conversations, messages, inbox | done — services + controllers + the web app pages; inbound media proxy, live thread polling, newest-page history, image/document/template replies |
 | 4 Automation engine | done — JSON workflows, conditions/actions, run history, queue behind `server/src/lib/queue.js` |
 | 5 AI agent + internal tools | done — provider-neutral (`ai/provider.js`: openai-compatible or mock), tool registry with schemas/permissions (`tools/registry.js`), agent loop (`ai/agent.js`); BYOK config per organization |
 | 6 WhatsApp Flows | not started (out of scope until asked) |
@@ -135,7 +136,8 @@ records (mode, unread, ownership, age). It is not stored. Within one level the
 
 ## 6. Frontend map
 
-- `src/lib/api.js` — bearer-token client, unwraps `{ data }`, 401 clears the session.
+- `src/lib/api.js` — bearer-token client, unwraps `{ data }`, 401 clears the session;
+  `api.blob()` fetches authenticated inbound media.
 - `src/lib/session.js` — the one place the browser token lives (never an org id).
 - `src/components/AuthProvider.js` — session context via `useSyncExternalStore`,
   `/api/auth/me` verification, sign in / register / sign out / change password.
@@ -150,12 +152,30 @@ records (mode, unread, ownership, age). It is not stored. Within one level the
 Server endpoints (all under `/api`, tenant-scoped): `auth`, `organizations`,
 `settings` (BYOK credentials + AI test), `dashboard`, `contacts`, `conversations`,
 `automations`, `ai-agents`, `tools`, `integrations`, `logs`, `whatsapp` (incl.
-`numbers`, `accounts`, `templates`, `messages`, `webhook-status`), and the public
-`webhooks/whatsapp`.
+`numbers`, `accounts`, `templates`, `messages`, `media/:messageId`, `webhook-status`),
+and the public `webhooks/whatsapp`.
 
 ---
 
 ## 7. What recent sessions changed
+
+### 2026-10-22 · Inbound media + chat + templates
+
+Goal: finish the WhatsApp loop after the metadata-only media phase.
+
+1. **Media proxy.** `GET /api/whatsapp/media/:messageId` resolves the inbound
+   media id with the tenant's Meta token and streams the bytes. The browser fetches
+   it with `api.blob()` (bearer token), so Meta tokens never reach the client.
+   Expired media is a 404; unsafe content types are forced to a download.
+2. **Chat.** Inbound image/sticker/video/audio/document render in the thread.
+   The thread opens at the newest message and polls every 10s while visible.
+   `GET /api/conversations/:id/messages` now returns the **newest** page
+   oldest-first (it used to return the oldest page).
+3. **Templates.** The WhatsApp page loads approved templates for the selected
+   number's WABA; the inbox attachment panel can send name/language/components.
+   `GET /api/whatsapp/templates` now accepts `phoneNumberId`.
+4. **Previews.** Media messages produce a preview (caption, filename or `[type]`).
+5. **Tests.** Added `server/tests/whatsapp.media.test.js`; suite is 62/62.
 
 ### 2026-10-20 · WhatsApp messaging + BYOK
 
@@ -237,21 +257,16 @@ Goal: get the frontend green after the visual build, then document it.
 
 ## 8. Next actions (suggested, in order)
 
-1. **Inbound media proxy.** Media ids arrive and expire; add a tenant-scoped
-   `GET` that resolves the Graph media URL with the stored token so the inbox can
-   render images/documents instead of `[image message]`.
-2. **Template picker.** The API can list approved templates, but the WhatsApp test
-   panel still takes name/language by hand — wire the list into a picker.
-3. **Human visual pass on the running app.** Sign in as `owner@acme.test` and walk
+1. **Human visual pass on the running app.** Sign in as `owner@acme.test` and walk
    Dashboard → Inbox → Contacts → Automations → AI Agents → WhatsApp → Settings →
-   Logs at 1440px, ~1040px and 390px. The new Settings card and inbox attachment
-   row have not been seen by a human yet.
-4. **Refresh `README.md`.** It still says "Phase 2", points at deleted components
+   Logs at 1440px, ~1040px and 390px. The new media bubbles and template pickers
+   have not been seen by a human yet.
+2. **Refresh `README.md`.** It still says "Phase 2", points at deleted components
    (`SidebarNav`, `BackendStatus`, `config/modules.js`) and describes a
    Vercel/Render split that no longer matches the repo.
-5. **Integrations (phase 7)** ships only the interface — add real CRM/ecommerce
+3. **Integrations (phase 7)** ships only the interface — add real CRM/ecommerce
    adapters only when asked.
-6. Optional: flip a number from simulator to Meta using the Settings credentials
+4. Optional: flip a number from simulator to Meta using the Settings credentials
    and a Meta test number to exercise the real loop.
 
 Do **not** start phases 6, 8, or 11 without an explicit request.

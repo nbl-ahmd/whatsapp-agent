@@ -9,7 +9,7 @@ import { ExternalServiceError } from "../../lib/errors.js";
 
 const DEFAULT_TIMEOUT_MS = 15000;
 
-function buildUrl(path, baseUrl, version) {
+export function buildGraphUrl(path, baseUrl, version) {
   const base = (baseUrl || env.meta.graphApiBaseUrl || "https://graph.facebook.com").replace(
     /\/$/,
     "",
@@ -47,7 +47,7 @@ export async function callGraphApi(path, options = {}) {
 
   let response;
   try {
-    response = await fetchImpl(buildUrl(path, baseUrl, version), {
+    response = await fetchImpl(buildGraphUrl(path, baseUrl, version), {
       method,
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -97,4 +97,15 @@ export function getPhoneNumber(phoneNumberId, options = {}) {
 export function getTemplates(wabaId, options = {}) {
   const fields = options.fields || "id,name,status,category,language,components";
   return callGraphApi(`/${wabaId}/message_templates?fields=${fields}`, options);
+}
+
+/**
+ * Media metadata (including a short-lived download URL). Cloud API media ids
+ * expire, so callers must handle a 404 here.
+ */
+export function getMedia(mediaId, options = {}) {
+  const query = options.phoneNumberId
+    ? `?phone_number_id=${encodeURIComponent(options.phoneNumberId)}`
+    : "";
+  return callGraphApi(`/${encodeURIComponent(mediaId)}${query}`, options);
 }

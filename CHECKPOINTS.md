@@ -5,6 +5,49 @@ Newest first. Each checkpoint records **what changed**, **how it was verified**,
 
 ---
 
+## 2026-10-22 · Inbound media, template picker, live chat
+
+**Goal.** Complete the WhatsApp loop that stopped at metadata: view inbound media,
+pick real templates, and make the inbox behave like a chat.
+
+**Done.**
+
+- **Inbound media proxy.** `GET /api/whatsapp/media/:messageId` resolves the stored
+  media id with the tenant's own Meta token, streams the bytes through the API, and
+  keeps the token server-side. Expired media returns a clear 404; only safe types
+  render inline (images/video/audio/PDF/plain text), everything else is forced to a
+  download. No new storage or migration is required.
+- **Chat rendering.** Inbound images, stickers, video, audio and documents render in
+  the thread via the authenticated proxy. Outbound media still uses its public link.
+  The thread opens at the newest message, stays pinned while new messages arrive,
+  and polls every 10 seconds while visible.
+- **History order.** `GET /api/conversations/:id/messages` now returns the *newest*
+  page oldest-first; previously a long thread returned its oldest 50 messages.
+- **Template picker.** The WhatsApp page loads approved templates for the selected
+  number's WABA (with name/language filled from the selection). The inbox attachment
+  panel can send a template (name/language/components) and therefore works outside
+  the 24-hour customer-service window.
+- **Previews.** Media messages show a useful conversation preview (caption, filename
+  or `[image]`) instead of leaving the previous text in place.
+
+**Verified.**
+
+- `npm test` → **62/62** pass, including new media proxy, tenant-scoping, expired
+  media, per-number template listing and newest-page history tests.
+- `npm run lint` → clean.
+- `npm run build` → passes; all 12 routes prerender.
+- Manual API E2E on throwaway tenants: text send → conversation → reply; template
+  send; text media probe returns 404; simulator number without WABA returns a
+  validation error. Throwaway tenants were deleted afterwards.
+
+**Left.**
+
+1. Human visual pass at 1440 / ~1040 / 390px (unchanged).
+2. `README.md` still describes the Phase 2-only backend and deleted components.
+3. Phase 7 adapters, then phases 6/8/11 only on request.
+
+---
+
 ## 2026-10-20 · WhatsApp messaging + BYOK credentials
 
 **Goal.** Finish the WhatsApp messaging path and let an operator configure Meta
