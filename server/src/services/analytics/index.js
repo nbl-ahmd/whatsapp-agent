@@ -16,6 +16,63 @@ function startOfToday() {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
 
+/**
+ * Message and conversation counts per UTC day for the dashboard chart.
+ *
+ * Uses two small aggregate queries rather than loading rows: the bucket list is
+ * built in JS so days with no activity still appear. `timestamp`/`createdAt`
+ * are indexed by organization, so the range scan stays cheap.
+ */
+export async function getActivity({ organizationId, days = 7 }) {
+  const windowDays = Math.min(Math.max(Number(days) || 7, 1), 30);
+  const now = new Date();
+  const start = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - (windowDays - 1)),
+  );
+
+  const [messageRows, conversationRows] = await Promise.all([
+    prisma.$queryRaw`
+      SELECT
+        to_char(date_trunc('day', "timestamp" AT TIME ZONE 'UTC'), 'YYYY-MM-DD') AS date,
+        COUNT(*) FILTER (WHERE "direction" = 'inbound')::int AS inbound,
+        COUNT(*) FILTER (WHERE "direction" = 'outbound')::int AS outbound
+      FROM "Message"
+      WHERE "organizationId" = ${organizationId}
+        AND "timestamp" >= ${start}
+      GROUP BY 1
+    `,
+    prisma.$queryRaw`
+      SELECT
+        to_char(date_trunc('day', "createdAt" AT TIME ZONE 'UTC'), 'YYYY-MM-DD') AS date,
+        COUNT(*)::int AS conversations
+      FROM "Conversation"
+      WHERE "organizationId" = ${organizationId}
+        AND "createdAt" >= ${start}
+      GROUP BY 1
+    `,
+  ]);
+
+  const buckets = new Map();
+  for (let index = 0; index < windowDays; index += 1) {
+    const key = new Date(start.getTime() + index * 86_400_000).toISOString().slice(0, 10);
+    buckets.set(key, { date: key, inbound: 0, outbound: 0, conversations: 0 });
+  }
+
+  for (const row of messageRows) {
+    const bucket = buckets.get(row.date);
+    if (!bucket) continue;
+    bucket.inbound += Number(row.inbound);
+    bucket.outbound += Number(row.outbound);
+  }
+
+  for (const row of conversationRows) {
+    const bucket = buckets.get(row.date);
+    if (bucket) bucket.conversations += Number(row.conversations);
+  }
+
+  return { days: windowDays, timezone: "UTC", buckets: [...buckets.values()] };
+}
+
 export async function getDashboard({ organizationId }) {
   const since = startOfToday();
 
@@ -31,6 +88,7 @@ export async function getDashboard({ organizationId }) {
     recentConversations,
     recentRuns,
     handoffsToday,
+    activity,
   ] = await Promise.all([
     prisma.conversation.groupBy({
       by: ["mode"],
@@ -83,6 +141,7 @@ export async function getDashboard({ organizationId }) {
     prisma.automationRun.count({
       where: { organizationId, eventType: "HUMAN_HANDOFF", createdAt: { gte: since } },
     }),
+    getActivity({ organizationId }),
   ]);
 
   const modeOf = (mode) => conversationsByMode.find((row) => row.mode === mode)?._count._all ?? 0;
@@ -104,6 +163,7 @@ export async function getDashboard({ organizationId }) {
     messages: { inboundToday: messagesToday, outboundToday: messagesOutboundToday },
     automations: { active: activeAutomations },
     handoffsToday,
+    activity,
     phoneNumbers,
     recentConversations,
     recentRuns,

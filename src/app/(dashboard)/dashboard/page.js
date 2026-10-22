@@ -55,7 +55,8 @@ import {
 } from "@/components/ui/table";
 
 const volumeConfig = {
-  count: { label: "Conversations", color: "var(--chart-1)" },
+  inbound: { label: "Inbound", color: "var(--chart-1)" },
+  outbound: { label: "Outbound", color: "var(--chart-2)" },
 };
 
 export default function DashboardPage() {
@@ -76,26 +77,16 @@ export default function DashboardPage() {
   );
 
   const volume = useMemo(() => {
-    const base = new Date();
-    base.setHours(0, 0, 0, 0);
-    const days = [];
-    for (let index = 6; index >= 0; index -= 1) {
-      const date = new Date(base.getTime() - index * 86400000);
-      days.push({
-        key: date.toDateString(),
-        day: date.toLocaleDateString([], { weekday: "short" }),
-        count: 0,
-      });
-    }
-    const buckets = new Map(days.map((entry) => [entry.key, entry]));
-    for (const conversation of conversations) {
-      const at = conversation.lastMessageAt || conversation.createdAt;
-      if (!at) continue;
-      const bucket = buckets.get(new Date(at).toDateString());
-      if (bucket) bucket.count += 1;
-    }
-    return days;
-  }, [conversations]);
+    const buckets = data?.activity?.buckets ?? [];
+    return buckets.map((bucket) => ({
+      day: new Date(`${bucket.date}T00:00:00Z`).toLocaleDateString([], {
+        weekday: "short",
+        timeZone: "UTC",
+      }),
+      inbound: bucket.inbound,
+      outbound: bucket.outbound,
+    }));
+  }, [data]);
 
   const modeMix = useMemo(() => {
     if (!data) return [];
@@ -178,30 +169,53 @@ export default function DashboardPage() {
 
           <div className="grid gap-4 lg:grid-cols-3">
             <SectionCard
-              title="Conversation volume"
-              description="Threads with activity, last 7 days"
+              title="Message volume"
+              description="Inbound and outbound, last 7 days"
               className="lg:col-span-2"
             >
               <ChartContainer config={volumeConfig} className="h-[240px] w-full">
                 <AreaChart data={volume} margin={{ left: 4, right: 8, top: 8 }}>
                   <defs>
-                    <linearGradient id="volumeFill" x1="0" y1="0" x2="0" y2="1">
+                    <linearGradient id="inboundFill" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="var(--chart-1)" stopOpacity={0.35} />
                       <stop offset="100%" stopColor="var(--chart-1)" stopOpacity={0.02} />
+                    </linearGradient>
+                    <linearGradient id="outboundFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="var(--chart-2)" stopOpacity={0.35} />
+                      <stop offset="100%" stopColor="var(--chart-2)" stopOpacity={0.02} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid vertical={false} strokeDasharray="4 4" />
                   <XAxis dataKey="day" tickLine={false} axisLine={false} tickMargin={8} />
                   <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
                   <Area
-                    dataKey="count"
+                    dataKey="inbound"
+                    stackId="messages"
                     type="monotone"
                     stroke="var(--chart-1)"
                     strokeWidth={2}
-                    fill="url(#volumeFill)"
+                    fill="url(#inboundFill)"
+                  />
+                  <Area
+                    dataKey="outbound"
+                    stackId="messages"
+                    type="monotone"
+                    stroke="var(--chart-2)"
+                    strokeWidth={2}
+                    fill="url(#outboundFill)"
                   />
                 </AreaChart>
               </ChartContainer>
+              <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1.5">
+                  <span className="size-2.5 rounded-full" style={{ background: "var(--chart-1)" }} />
+                  Inbound
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="size-2.5 rounded-full" style={{ background: "var(--chart-2)" }} />
+                  Outbound
+                </span>
+              </div>
             </SectionCard>
 
             <SectionCard title="Mode mix" description="Who is answering">

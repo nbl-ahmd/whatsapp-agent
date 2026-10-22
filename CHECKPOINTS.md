@@ -5,6 +5,37 @@ Newest first. Each checkpoint records **what changed**, **how it was verified**,
 
 ---
 
+## 2026-10-22 · Analytics activity (phase 9 complete for MVP)
+
+**Goal.** Make the dashboard's volume chart report real message traffic instead of
+counting the last 100 conversations.
+
+**Done.**
+
+- **Activity buckets.** `getActivity()` in `services/analytics/index.js` runs two
+  aggregate queries (messages by direction, new conversations) grouped by UTC day,
+  then fills empty days in JS. Window defaults to 7 days and clamps to 1–30.
+- **Dashboard payload.** `GET /api/dashboard` now includes `activity:
+  { days, timezone, buckets[] }`.
+- **Chart.** The dashboard shows stacked inbound/outbound message volume with a
+  legend, sourced from the API rather than client-side conversation sampling.
+- **Tests.** `server/tests/analytics.test.js` covers UTC buckets, empty days,
+  tenant isolation, window clamping and the dashboard payload.
+
+**Verified.**
+
+- `npm test` → **70/70** pass.
+- `npm run lint` → clean.
+- `npm run build` → passes.
+
+**Left (phase 9, optional).**
+
+1. Arbitrary date ranges and CSV export.
+2. Log-retention policy.
+3. Phase 10 leftovers: error tracking, load test, backup scheduling.
+
+---
+
 ## 2026-10-22 · Security hardening (phase 9)
 
 **Goal.** Harden the public API for production without adding dependencies.

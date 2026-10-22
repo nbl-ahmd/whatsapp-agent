@@ -72,9 +72,9 @@ API is down, start it with `npm run dev:api`. The web app runs with `npm run dev
 
 - `npm run lint` → clean.
 - `npm run build` → succeeds; all 12 routes prerender.
-- `npm test` → **68/68** pass (auth, automation, crypto, database integration, messaging,
-  pipeline integration, http incl. readiness, security/rate limits, tenant scoping, tools,
-  settings, whatsapp normalize/verify/integration, media proxy).
+- `npm test` → **70/70** pass (auth, analytics, automation, crypto, database integration,
+  messaging, pipeline integration, http incl. readiness, security/rate limits, tenant
+  scoping, tools, settings, whatsapp normalize/verify/integration, media proxy).
 - Manual HTTP E2E on throwaway orgs: text send → conversation → reply; template
   send; media proxy rejects a text message with a clear 404; template listing on a
   simulator number fails with a validation error (no WABA). Tenants cleaned up.
@@ -103,7 +103,7 @@ Working tree: the Phase 1–5 history is in `CHECKPOINTS.md`. The current work
 | 6 WhatsApp Flows | not started (out of scope until asked) |
 | 7 CRM/ecommerce/MCP adapters | interface only — `services/integrations/index.js`, routes present; **Integrations page shows the adapter contract and connection records, but no provider adapters are registered** |
 | 8 MCP | not started |
-| 9 Logs/analytics/hardening | in progress — logs + audit + dashboard counts, rate limiting, security headers and request ids; analytics is still today-only |
+| 9 Logs/analytics/hardening | done for MVP — logs + audit + dashboard counts + 7-day message activity, rate limiting, security headers and request ids; log retention and analytics export deferred |
 | 10 Testing/docs/prod prep | in progress — CI (frontend lint/build, backend tests on Postgres), `/health/ready`, `docs/DEPLOYMENT.md`; still missing load testing, error tracking and automated backups |
 | 11 Embedded Signup | not started (explicitly deferred) |
 
@@ -159,6 +159,21 @@ and the public `webhooks/whatsapp`. Outside `/api`: `GET /health` (liveness) and
 ---
 
 ## 7. What recent sessions changed
+
+### 2026-10-22 · Analytics activity (phase 9, finished for MVP)
+
+Goal: replace the dashboard's conversation-derived estimate with real counts.
+
+1. **`getActivity()`.** Two aggregate SQL queries bucket inbound/outbound messages
+   and new conversations per UTC day; days with no activity are filled in JS. The
+   window defaults to 7 days and clamps to 1–30.
+2. **Dashboard.** `GET /api/dashboard` returns `activity` alongside the existing
+   counts. The chart now shows stacked inbound/outbound message volume with a
+   legend instead of counting the last 100 conversations.
+3. **Tests.** `server/tests/analytics.test.js` covers UTC buckets, empty days,
+   tenant isolation, window clamping and the dashboard payload; suite is 70/70.
+
+Deferred: arbitrary date ranges, CSV export, and a log-retention policy.
 
 ### 2026-10-22 · Security hardening (phase 9, started)
 
@@ -301,8 +316,8 @@ Goal: get the frontend green after the visual build, then document it.
    loop. The deployment runbook lists the webhook setup.
 3. **Finish phase 10:** add error tracking/monitoring and decide whether load
    testing or automated backup scheduling is in scope.
-4. **Finish phase 9:** analytics beyond today's counts (trends, date ranges,
-   export) and review the log retention story.
+4. **Phase 9 leftovers (optional):** arbitrary date ranges, CSV export, log
+   retention policy.
 5. **Integrations (phase 7)** ships only the interface — add real CRM/ecommerce
    adapters only when asked.
 
@@ -327,6 +342,9 @@ Do **not** start phases 6, 8, or 11 without an explicit request.
   across Render instances; use Redis if a strict global quota is ever required.
 - **Request ids:** `req.id` is set by `middleware/requestContext.js`; include it
   in new error/log paths instead of inventing another correlation scheme.
+- **Analytics uses UTC days.** `getActivity()` buckets by UTC midnight because the
+  app has no per-organization timezone yet; label buckets with `timeZone: "UTC"`
+  so the UI cannot shift them into the previous day.
 - **React 19 lint is strict.** Avoid `setState` synchronously in an effect body —
   derive instead, or set state inside a promise/event callback, or use
   `useSyncExternalStore`.
