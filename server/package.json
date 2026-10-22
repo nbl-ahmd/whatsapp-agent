@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "node --watch src/server.js",
+    "prestart": "prisma migrate deploy --config prisma.config.mjs",
     "start": "node src/server.js",
     "test": "node --test tests/*.test.js",
     "load:webhook": "node scripts/load-webhook.mjs",
@@ -25,9 +26,7 @@
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
     "express": "^5.2.1",
-    "pg": "^8.23.0"
-  },
-  "devDependencies": {
+    "pg": "^8.23.0",
     "prisma": "^7.10.0"
   }
 }

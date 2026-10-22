@@ -5,6 +5,33 @@ Newest first. Each checkpoint records **what changed**, **how it was verified**,
 
 ---
 
+## 2026-10-22 · Deployed 500: unmigrated database
+
+**Symptom.** After CORS was fixed, `POST /api/auth/register` and
+`POST /api/auth/login` returned `500 INTERNAL_ERROR`.
+
+**Cause.** Render logs showed
+`The table public.User does not exist in the current database` — the database
+was reachable but `prisma migrate deploy` had never run.
+
+**Done.**
+
+- `server/package.json` now runs `prisma migrate deploy` as `prestart`, so
+  `npm start` applies pending migrations before the API boots. `prisma` moved
+  from devDependencies to dependencies so the CLI exists in the production
+  install.
+- `/health/ready` checks the core `User` table and returns `503` with
+  `checks.schema: "missing"` when the database is reachable but unmigrated.
+- DEPLOYMENT now has a fix-it section for this exact error (Render Shell or
+  external URL) and notes that startup migrates automatically.
+- Verified `npm run db:deploy` works and the readiness test asserts the schema
+  check.
+
+**Manual step.** Existing deploys must run `npm run db:deploy` once (or deploy
+the new commit, which does it at startup).
+
+---
+
 ## 2026-10-22 · Deployed CORS failure fix
 
 **Symptom.** Registering from the deployed Vercel app showed `Failed to fetch`

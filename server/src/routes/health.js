@@ -16,7 +16,7 @@ router.get("/", (_req, res) => {
  * are deliberately not returned (they can contain connection strings).
  */
 router.get("/ready", async (_req, res) => {
-  const checks = { database: "ok" };
+  const checks = { database: "ok", schema: "ok" };
   let ready = true;
 
   try {
@@ -24,6 +24,17 @@ router.get("/ready", async (_req, res) => {
   } catch {
     ready = false;
     checks.database = "unavailable";
+  }
+
+  if (ready) {
+    try {
+      // A reachable database can still be unmigrated; that is a deploy failure,
+      // not a healthy service.
+      await prisma.$queryRaw`SELECT 1 FROM "User" LIMIT 1`;
+    } catch {
+      ready = false;
+      checks.schema = "missing";
+    }
   }
 
   res.status(ready ? 200 : 503).json({

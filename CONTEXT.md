@@ -161,6 +161,16 @@ and the public `webhooks/whatsapp`. Outside `/api`: `GET /health` (liveness) and
 
 ## 7. What recent sessions changed
 
+### 2026-10-22 · Deployed 500 fix (unmigrated database)
+
+1. **Diagnosis.** CORS was fixed, then auth returned 500 because
+   `public.User` did not exist: migrations had never been applied on Render.
+2. **Startup migrations.** `prestart` runs `prisma migrate deploy`; `prisma` is
+   now a production dependency so the CLI is always installed.
+3. **Readiness.** `/health/ready` checks the `User` table and reports
+   `schema: "missing"` with a `503` instead of claiming the service is ready.
+4. **Docs.** DEPLOYMENT has the recovery commands for existing deployments.
+
 ### 2026-10-22 · Deployed CORS fix
 
 1. **Diagnosis.** A deployed register attempt reached Render but the browser

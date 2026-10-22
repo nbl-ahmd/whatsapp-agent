@@ -39,10 +39,10 @@ Create a **Web Service** from this repository.
 | --- | --- |
 | Root directory | `server` |
 | Runtime | Node |
-| Build command | `npm ci --include=dev` (the Prisma CLI is a devDependency and is needed by `postinstall` and migrations) |
-| Start command | `npm start` |
+| Build command | `npm ci` (the Prisma CLI is a production dependency) |
+| Start command | `npm start` (applies pending migrations, then starts the API) |
 | Health check path | `/health/ready` |
-| Pre-deploy command | `npm run db:deploy` |
+| Pre-deploy command | `npm run db:deploy` (optional; `npm start` also migrates) |
 
 `/health` is a cheap liveness probe; `/health/ready` additionally runs
 `SELECT 1` against PostgreSQL and returns `503` when the database is
@@ -134,7 +134,8 @@ tokens, AI keys or `ENCRYPTION_KEY` on Vercel.
 ## 4. Migrations
 
 Migrations are forward-only. Run them **before** new code starts serving
-traffic — the Render pre-deploy command does this automatically:
+traffic. Both the Render pre-deploy command (if configured) and `npm start`
+(via `prestart`) apply them automatically:
 
 ```bash
 npm run db:deploy
@@ -202,6 +203,43 @@ match `FRONTEND_URL`.
 Render logs now print `Blocked browser origin by CORS; check FRONTEND_URL` with
 the offending origin, and the API warns at boot when `FRONTEND_URL` still points
 at localhost.
+
+## Troubleshooting: `500 INTERNAL_ERROR` / `table does not exist`
+
+The API is up and the database is reachable, but migrations were never applied.
+The Render log shows:
+
+```text
+Invalid `prisma.user.findUnique()` invocation:
+The table `public.User` does not exist in the current database.
+```
+
+Fix it immediately in one of these ways:
+
+**Render Shell** (service → Shell):
+
+```bash
+cd /opt/render/project/src/server
+npm run db:deploy
+```
+
+**Or from your machine** against the Render **external** database URL:
+
+```bash
+cd server
+DATABASE_URL='postgresql://...external...' npm run db:deploy
+```
+
+Then retry sign-up. Do **not** run `db:seed` in production.
+
+Deployments from the current commit run `prisma migrate deploy` automatically
+via `prestart` before the API starts, so this should not recur. `/health/ready`
+now returns `503` with `checks.schema: "missing"` when the database is reachable
+but unmigrated.
+
+If migrations report success and the table is still missing, confirm
+`DATABASE_URL` points at the same database you inspected (Render internal vs
+external URL, and the `schema` query parameter).
 
 ## 6. Backups and restore
 

@@ -51,6 +51,7 @@ test(
       const body = await res.json();
       assert.equal(body.status, "ready");
       assert.equal(body.checks.database, "ok");
+      assert.equal(body.checks.schema, "ok");
       assert.equal(typeof body.uptimeSeconds, "number");
 
       const serialized = JSON.stringify(body);

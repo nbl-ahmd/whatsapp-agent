@@ -176,8 +176,8 @@ checklist.
 
 **Backend - Render** (Web Service, root directory: `server`)
 
-- Build: `npm ci --include=dev` (the Prisma CLI is a devDependency)
-- Start: `npm start` (runs `node src/server.js`)
+- Build: `npm ci`
+- Start: `npm start` (applies pending migrations first)
 - Pre-deploy: `npm run db:deploy`
 - Env: all backend variables above; set `FRONTEND_URL=https://app.yourdomain.com`
 - Health check path: `/health/ready`
