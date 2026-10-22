@@ -165,8 +165,9 @@ and the public `webhooks/whatsapp`. Outside `/api`: `GET /health` (liveness) and
 
 1. **Diagnosis.** CORS was fixed, then auth returned 500 because
    `public.User` did not exist: migrations had never been applied on Render.
-2. **Startup migrations.** `prestart` runs `prisma migrate deploy`; `prisma` is
-   now a production dependency so the CLI is always installed.
+2. **Manual migrations.** `npm run db:deploy` applies migrations; nothing runs
+   them at boot or deploy. `prisma` stays a production dependency so
+   `postinstall` can generate the client on a plain `npm ci`.
 3. **Readiness.** `/health/ready` checks the `User` table and reports
    `schema: "missing"` with a `503` instead of claiming the service is ready.
 4. **Docs.** DEPLOYMENT has the recovery commands for existing deployments.

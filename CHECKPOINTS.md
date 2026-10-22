@@ -16,14 +16,13 @@ was reachable but `prisma migrate deploy` had never run.
 
 **Done.**
 
-- `server/package.json` now runs `prisma migrate deploy` as `prestart`, so
-  `npm start` applies pending migrations before the API boots. `prisma` moved
-  from devDependencies to dependencies so the CLI exists in the production
-  install.
+- **Manual migrations.** `npm run db:deploy` is the only migration path; nothing
+  runs at boot or deploy. `prisma` remains a production dependency so
+  `postinstall` can generate the client with a plain `npm ci`.
 - `/health/ready` checks the core `User` table and returns `503` with
   `checks.schema: "missing"` when the database is reachable but unmigrated.
 - DEPLOYMENT now has a fix-it section for this exact error (Render Shell or
-  external URL) and notes that startup migrates automatically.
+  external URL) and states that migrations are manual.
 - Verified `npm run db:deploy` works and the readiness test asserts the schema
   check.
 

@@ -39,10 +39,10 @@ Create a **Web Service** from this repository.
 | --- | --- |
 | Root directory | `server` |
 | Runtime | Node |
-| Build command | `npm ci` (the Prisma CLI is a production dependency) |
-| Start command | `npm start` (applies pending migrations, then starts the API) |
+| Build command | `npm ci` |
+| Start command | `npm start` |
 | Health check path | `/health/ready` |
-| Pre-deploy command | `npm run db:deploy` (optional; `npm start` also migrates) |
+| Pre-deploy command | none — apply migrations manually before deploying |
 
 `/health` is a cheap liveness probe; `/health/ready` additionally runs
 `SELECT 1` against PostgreSQL and returns `503` when the database is
@@ -133,19 +133,18 @@ tokens, AI keys or `ENCRYPTION_KEY` on Vercel.
 
 ## 4. Migrations
 
-Migrations are forward-only. Run them **before** new code starts serving
-traffic. Both the Render pre-deploy command (if configured) and `npm start`
-(via `prestart`) apply them automatically:
+Migrations are forward-only and **manual**. Apply them before the new code is
+deployed; nothing runs migrations at boot:
 
 ```bash
 npm run db:deploy
 ```
 
-From your machine against the external database URL:
+From your machine against the Render **external** database URL:
 
 ```bash
 cd server
-DATABASE_URL='postgresql://...' npm run db:deploy
+DATABASE_URL='postgresql://...external...' npm run db:deploy
 ```
 
 Rules:
@@ -232,10 +231,9 @@ DATABASE_URL='postgresql://...external...' npm run db:deploy
 
 Then retry sign-up. Do **not** run `db:seed` in production.
 
-Deployments from the current commit run `prisma migrate deploy` automatically
-via `prestart` before the API starts, so this should not recur. `/health/ready`
-now returns `503` with `checks.schema: "missing"` when the database is reachable
-but unmigrated.
+Deployments do **not** run migrations automatically. Apply them manually before
+deploying (see section 4). `/health/ready` returns `503` with
+`checks.schema: "missing"` when the database is reachable but unmigrated.
 
 If migrations report success and the table is still missing, confirm
 `DATABASE_URL` points at the same database you inspected (Render internal vs

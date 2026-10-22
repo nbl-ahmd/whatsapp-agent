@@ -177,7 +177,7 @@ checklist.
 **Backend - Render** (Web Service, root directory: `server`)
 
 - Build: `npm ci`
-- Start: `npm start` (applies pending migrations first)
+- Start: `npm start` (runs `node src/server.js`; migrations are manual)
 - Pre-deploy: `npm run db:deploy`
 - Env: all backend variables above; set `FRONTEND_URL=https://app.yourdomain.com`
 - Health check path: `/health/ready`
