@@ -87,7 +87,19 @@ LOG_LEVEL=info
 AUTH_TOKEN_TTL_HOURS=168
 REDIS_URL=          # only if the queue driver is switched from in-process
 WHATSAPP_TEST_API_KEY=   # only for unauthenticated server-to-server sends
+
+# Process-local rate limits (defaults shown)
+AUTH_RATE_LIMIT_MAX=20
+AUTH_RATE_LIMIT_WINDOW_MS=900000
+WEBHOOK_RATE_LIMIT_MAX=600
+WEBHOOK_RATE_LIMIT_WINDOW_MS=60000
+MESSAGE_RATE_LIMIT_MAX=60
+MESSAGE_RATE_LIMIT_WINDOW_MS=60000
 ```
+
+Rate limits are per API instance. If Render is scaled to multiple instances, the
+effective limits multiply; move the counter to Redis before relying on strict
+global quotas.
 
 With `NODE_ENV=production` and no `WHATSAPP_TEST_API_KEY`, the shared-key path on
 `POST /api/whatsapp/messages` is disabled — signed-in operators still work.

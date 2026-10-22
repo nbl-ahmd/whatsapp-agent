@@ -2,13 +2,14 @@ import { Router } from "express";
 import * as accounts from "../controllers/whatsappAccountsController.js";
 import { media, sendMessage } from "../controllers/whatsappController.js";
 import { ADMIN_ROLES, optionalAuth, requireAuth, requireRole } from "../middleware/auth.js";
+import { messageLimiter } from "../middleware/rateLimits.js";
 import { asyncHandler } from "../utils/http.js";
 
 const router = Router();
 
 // Outbound send: an operator session, or a server-to-server caller holding the
 // shared test key (see whatsappController.requireServerAccess).
-router.post("/messages", optionalAuth, asyncHandler(sendMessage));
+router.post("/messages", optionalAuth, messageLimiter, asyncHandler(sendMessage));
 
 // Inbound media proxy (authenticated; streams bytes, never returns the token).
 router.get("/media/:messageId", asyncHandler(requireAuth), asyncHandler(media));

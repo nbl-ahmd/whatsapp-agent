@@ -1,6 +1,7 @@
 import express from "express";
 import { corsMiddleware } from "./middleware/cors.js";
 import { errorHandler, notFound } from "./middleware/errorHandler.js";
+import { requestContext, securityHeaders } from "./middleware/requestContext.js";
 import { registerRoutes } from "./routes/index.js";
 
 /**
@@ -13,6 +14,9 @@ export function createApp() {
   app.disable("x-powered-by");
   app.set("trust proxy", 1);
 
+  // Correlation id + security headers run before anything that can reject.
+  app.use(requestContext);
+  app.use(securityHeaders);
   app.use(corsMiddleware);
 
   // Keep the raw body so webhook signature verification can HMAC the exact bytes.

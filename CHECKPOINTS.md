@@ -5,6 +5,42 @@ Newest first. Each checkpoint records **what changed**, **how it was verified**,
 
 ---
 
+## 2026-10-22 · Security hardening (phase 9)
+
+**Goal.** Harden the public API for production without adding dependencies.
+
+**Done.**
+
+- **Rate limiting.** `server/src/lib/rateLimit.js` implements a bounded fixed-window
+  limiter (per-process). Shared instances in `middleware/rateLimits.js` protect
+  login/register (20 per 15 min per IP), Meta webhooks (600 per minute per IP) and
+  outbound sends (60 per minute per organization). All limits are env-configurable
+  (`AUTH_*`, `WEBHOOK_*`, `MESSAGE_RATE_LIMIT_*`), return standard `RateLimit-*`
+  headers and `Retry-After` on 429.
+- **Security headers.** Every response sets `X-Content-Type-Options`, `X-Frame-Options`,
+  `Referrer-Policy`, `Permissions-Policy` and a document CSP (skipped for media
+  downloads); HSTS is added in production.
+- **Request ids.** `middleware/requestContext.js` assigns or preserves a safe
+  `x-request-id`, returns it in the header, includes it in error bodies (including
+  404s and invalid JSON) and logs failed requests at warn/error.
+- **Docs/config.** `server/.env.example`, README security notes and the deployment
+  runbook document the new limits and headers.
+
+**Verified.**
+
+- `npm test` → **68/68** pass, including headers, request-id handling, 404 envelope,
+  limiter quota and per-key isolation.
+- `npm run lint` → clean.
+- `npm run build` → passes.
+
+**Left.**
+
+1. Analytics beyond today's counts (trends, date ranges, export).
+2. Log retention policy.
+3. Phase 10 leftovers (error tracking, load test, backup scheduling).
+
+---
+
 ## 2026-10-22 · Production readiness (phase 10)
 
 **Goal.** Start phase 10 with the parts a deployment actually needs: a real

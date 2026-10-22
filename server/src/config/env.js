@@ -70,6 +70,17 @@ export const env = {
     baseUrl: optional("AI_BASE_URL", "https://api.openai.com/v1"),
     model: optional("AI_MODEL", "gpt-4o-mini"),
   },
+
+  // Per-process fixed-window limits. Override the defaults only when real
+  // traffic shows they are wrong for the deployment.
+  rateLimit: {
+    authMax: Number(optional("AUTH_RATE_LIMIT_MAX", "20")),
+    authWindowMs: Number(optional("AUTH_RATE_LIMIT_WINDOW_MS", "900000")),
+    webhookMax: Number(optional("WEBHOOK_RATE_LIMIT_MAX", "600")),
+    webhookWindowMs: Number(optional("WEBHOOK_RATE_LIMIT_WINDOW_MS", "60000")),
+    messageMax: Number(optional("MESSAGE_RATE_LIMIT_MAX", "60")),
+    messageWindowMs: Number(optional("MESSAGE_RATE_LIMIT_WINDOW_MS", "60000")),
+  },
 };
 
 /**

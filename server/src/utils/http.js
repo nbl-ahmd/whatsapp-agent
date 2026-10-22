@@ -14,19 +14,29 @@ export function created(res, data = {}) {
   return res.status(201).json({ data });
 }
 
-export function sendError(res, error) {
+export function sendError(res, error, { requestId } = {}) {
   if (isAppError(error)) {
     return res.status(error.statusCode).json({
-      error: { code: error.code, message: error.message, details: error.details },
+      error: {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        ...(requestId ? { requestId } : {}),
+      },
     });
   }
 
   logger.error("Unhandled request error", {
+    requestId,
     error: error?.message,
     stack: error?.stack,
   });
   return res.status(500).json({
-    error: { code: "INTERNAL_ERROR", message: "Something went wrong" },
+    error: {
+      code: "INTERNAL_ERROR",
+      message: "Something went wrong",
+      ...(requestId ? { requestId } : {}),
+    },
   });
 }
 

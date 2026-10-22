@@ -72,9 +72,9 @@ API is down, start it with `npm run dev:api`. The web app runs with `npm run dev
 
 - `npm run lint` → clean.
 - `npm run build` → succeeds; all 12 routes prerender.
-- `npm test` → **63/63** pass (auth, automation, crypto, database integration, messaging,
-  pipeline integration, http incl. readiness, tenant scoping, tools, settings, whatsapp
-  normalize/verify/integration, media proxy).
+- `npm test` → **68/68** pass (auth, automation, crypto, database integration, messaging,
+  pipeline integration, http incl. readiness, security/rate limits, tenant scoping, tools,
+  settings, whatsapp normalize/verify/integration, media proxy).
 - Manual HTTP E2E on throwaway orgs: text send → conversation → reply; template
   send; media proxy rejects a text message with a clear 404; template listing on a
   simulator number fails with a validation error (no WABA). Tenants cleaned up.
@@ -103,7 +103,7 @@ Working tree: the Phase 1–5 history is in `CHECKPOINTS.md`. The current work
 | 6 WhatsApp Flows | not started (out of scope until asked) |
 | 7 CRM/ecommerce/MCP adapters | interface only — `services/integrations/index.js`, routes present; **Integrations page shows the adapter contract and connection records, but no provider adapters are registered** |
 | 8 MCP | not started |
-| 9 Logs/analytics/hardening | partial — logs + audit + dashboard counts exist; no rate limiting, security headers or analytics beyond today's counts |
+| 9 Logs/analytics/hardening | in progress — logs + audit + dashboard counts, rate limiting, security headers and request ids; analytics is still today-only |
 | 10 Testing/docs/prod prep | in progress — CI (frontend lint/build, backend tests on Postgres), `/health/ready`, `docs/DEPLOYMENT.md`; still missing load testing, error tracking and automated backups |
 | 11 Embedded Signup | not started (explicitly deferred) |
 
@@ -159,6 +159,25 @@ and the public `webhooks/whatsapp`. Outside `/api`: `GET /health` (liveness) and
 ---
 
 ## 7. What recent sessions changed
+
+### 2026-10-22 · Security hardening (phase 9, started)
+
+Goal: close the obvious production abuse and observability gaps without adding
+dependencies.
+
+1. **Rate limits.** `server/src/lib/rateLimit.js` is a fixed-window limiter; the
+   shared instances in `middleware/rateLimits.js` protect login/register (per IP),
+   webhook deliveries (per IP) and outbound sends (per organization). Limits are
+   env-configurable and process-local.
+2. **Security headers.** `middleware/requestContext.js` sets nosniff, frame deny,
+   no-referrer, permissions policy, a document CSP (skipped for media) and HSTS
+   in production.
+3. **Request ids.** Every response gets `x-request-id`; a safe caller-supplied id
+   is preserved. Error bodies include it, and failed requests log at warn/error.
+4. **Tests.** `server/tests/security.test.js` covers headers, id handling, the 404
+   envelope and limiter quotas/isolation; suite is 68/68.
+
+Still open for phase 9: analytics beyond today's counts (trends/date ranges).
 
 ### 2026-10-22 · Production readiness (phase 10, started)
 
@@ -282,8 +301,8 @@ Goal: get the frontend green after the visual build, then document it.
    loop. The deployment runbook lists the webhook setup.
 3. **Finish phase 10:** add error tracking/monitoring and decide whether load
    testing or automated backup scheduling is in scope.
-4. **Phase 9 hardening:** rate limiting on auth/webhook/send, security headers,
-   and analytics beyond today's counts.
+4. **Finish phase 9:** analytics beyond today's counts (trends, date ranges,
+   export) and review the log retention story.
 5. **Integrations (phase 7)** ships only the interface — add real CRM/ecommerce
    adapters only when asked.
 
@@ -304,6 +323,10 @@ Do **not** start phases 6, 8, or 11 without an explicit request.
   must stop the AI immediately.
 - **Webhooks stay fast and idempotent:** persist → queue → return; repeated Meta
   deliveries must not duplicate work (idempotency by external event/message id).
+- **Rate limits are per process.** They reset on deploy and do not coordinate
+  across Render instances; use Redis if a strict global quota is ever required.
+- **Request ids:** `req.id` is set by `middleware/requestContext.js`; include it
+  in new error/log paths instead of inventing another correlation scheme.
 - **React 19 lint is strict.** Avoid `setState` synchronously in an effect body —
   derive instead, or set state inside a promise/event callback, or use
   `useSyncExternalStore`.

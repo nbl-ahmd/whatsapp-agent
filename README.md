@@ -217,3 +217,11 @@ encrypted at rest with `server/src/lib/crypto.js` (`ENCRYPTION_KEY`).
   organization id. `POST /api/whatsapp/messages` also accepts a server-to-server
   caller holding `WHATSAPP_TEST_API_KEY`; the shared key path is disabled in
   production when unset.
+- Login/register, webhook deliveries and outbound sends are rate limited per
+  process (see `server/src/config/env.js`). Tune the `*_RATE_LIMIT_*` variables
+  if real traffic needs different limits.
+- Every response carries `x-request-id` (or preserves a safe caller-supplied
+  one), and error bodies include it. Security headers are set for all API
+  responses, including HSTS in production.
+- Logs are JSON and redact token/secret/password/api-key fields. Failed requests
+  log at warn/error with the request id; successful requests log at debug.
