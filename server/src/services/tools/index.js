@@ -3,6 +3,7 @@ import { listTools as listRegisteredTools } from "./registry.js";
 
 export { executeTool, getTool, listTools, registerTool, toolNames } from "./registry.js";
 export { internalTools } from "./internal.js";
+export { integrationTools } from "./integrations.js";
 
 export const descriptor = Object.freeze({
   name: "tools",

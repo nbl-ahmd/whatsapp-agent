@@ -72,9 +72,10 @@ API is down, start it with `npm run dev:api`. The web app runs with `npm run dev
 
 - `npm run lint` → clean.
 - `npm run build` → succeeds; all 12 routes prerender.
-- `npm test` → **70/70** pass (auth, analytics, automation, crypto, database integration,
-  messaging, pipeline integration, http incl. readiness, security/rate limits, tenant
-  scoping, tools, settings, whatsapp normalize/verify/integration, media proxy).
+- `npm test` → **74/74** pass (auth, analytics, automation, crypto, database integration,
+  error reporter, integrations/adapters, messaging, pipeline integration, http incl.
+  readiness, security/rate limits, tenant scoping, tools, settings, whatsapp
+  normalize/verify/integration, media proxy).
 - Manual HTTP E2E on throwaway orgs: text send → conversation → reply; template
   send; media proxy rejects a text message with a clear 404; template listing on a
   simulator number fails with a validation error (no WABA). Tenants cleaned up.
@@ -96,20 +97,20 @@ Working tree: the Phase 1–5 history is in `CHECKPOINTS.md`. The current work
 | --- | --- |
 | 0 Project init | done |
 | 1 DB + multi-tenancy | done — org scoping via `server/src/lib/tenant.js`, auth middleware in `server/src/middleware/auth.js`, every query tenant-scoped |
-| 2 WhatsApp Cloud API + webhook | done — verify/signature, persist raw event, idempotent processing, send/receive, simulator provider; outbound text/image/document/template/interactive; inbound media is metadata only |
+| 2 WhatsApp Cloud API + webhook | done — verify/signature, persist raw event, idempotent processing, send/receive, simulator provider; outbound text/image/document/template/interactive; inbound media streams through an authenticated proxy |
 | 3 Contacts, conversations, messages, inbox | done — services + controllers + the web app pages; inbound media proxy, live thread polling, newest-page history, image/document/template replies |
 | 4 Automation engine | done — JSON workflows, conditions/actions, run history, queue behind `server/src/lib/queue.js` |
 | 5 AI agent + internal tools | done — provider-neutral (`ai/provider.js`: openai-compatible or mock), tool registry with schemas/permissions (`tools/registry.js`), agent loop (`ai/agent.js`); BYOK config per organization |
 | 6 WhatsApp Flows | not started (out of scope until asked) |
-| 7 CRM/ecommerce/MCP adapters | interface only — `services/integrations/index.js`, routes present; **Integrations page shows the adapter contract and connection records, but no provider adapters are registered** |
+| 7 CRM/ecommerce adapters | done for MVP — adapter registry + HubSpot CRM and Shopify ecommerce providers, encrypted connection CRUD, connection test, and generic `crm_*` / `ecommerce_*` AI tools. MCP is phase 8 |
 | 8 MCP | not started |
 | 9 Logs/analytics/hardening | done for MVP — logs + audit + dashboard counts + 7-day message activity, rate limiting, security headers and request ids; log retention and analytics export deferred |
-| 10 Testing/docs/prod prep | in progress — CI (frontend lint/build, backend tests on Postgres), `/health/ready`, `docs/DEPLOYMENT.md`; still missing load testing, error tracking and automated backups |
+| 10 Testing/docs/prod prep | done for MVP — CI, `/health/ready`, deployment runbook, error webhook, load-test and backup scripts; schedule backups at the platform level |
 | 11 Embedded Signup | not started (explicitly deferred) |
 
 Frontend pages (`src/app/(dashboard)/`): Dashboard, Inbox, Contacts, Automations,
-AI Agents, WhatsApp, Logs, Settings are implemented; **Integrations** renders the
-adapter contract and connection records but has no real providers behind it.
+AI Agents, WhatsApp, Integrations, Logs and Settings are implemented.
+Integrations can connect HubSpot/Shopify, test the connection and remove it.
 
 ---
 
@@ -159,6 +160,38 @@ and the public `webhooks/whatsapp`. Outside `/api`: `GET /health` (liveness) and
 ---
 
 ## 7. What recent sessions changed
+
+### 2026-10-22 · CRM/ecommerce adapters (phase 7)
+
+Goal: replace the empty integration seam with real providers and AI tools.
+
+1. **Adapter registry.** `services/integrations/registry.js` stores provider
+   factories plus the fields their connection form needs; `adapters/index.js`
+   registers HubSpot (CRM) and Shopify (ecommerce).
+2. **Encrypted connections.** `services/integrations/index.js` creates, updates,
+   deletes and tests connections. Secret fields are AES-GCM encrypted; the API
+   returns only flags and non-secret config.
+3. **AI tools.** `crm_find_customer`, `crm_create_lead`,
+   `ecommerce_search_products`, `ecommerce_get_order` and
+   `ecommerce_list_orders` resolve the organization's active provider at call
+   time. No vendor name appears in the prompt.
+4. **UI.** The Integrations page can connect a provider, test it, remove it and
+   shows the catalog. API routes are admin-only for writes.
+5. **Tests.** `server/tests/integrations.test.js` runs both adapters against a
+   local mock provider, verifies credentials never appear in list responses,
+   checks tool resolution and the "no active integration" error.
+
+### 2026-10-22 · Production readiness leftovers (phase 10)
+
+1. **Error reporting.** Optional `ERROR_WEBHOOK_URL` receives unhandled HTTP and
+   queue failures as bounded, secret-free JSON (request id, route, short stack),
+   throttled to one report per 5 s.
+2. **Backups.** `npm run db:backup` writes a custom-format `pg_dump` into
+   `server/backups/` and prunes dumps older than `RETENTION_DAYS` (default 7).
+3. **Load test.** `npm run load:webhook` sends signed unique webhooks to a running
+   API and prints throughput, p50/p95 and status counts. Use staging.
+4. **Docs.** DEPLOYMENT covers the error webhook, cron backup example and load-test
+   procedure. Suite is 72/72.
 
 ### 2026-10-22 · Analytics activity (phase 9, finished for MVP)
 
@@ -314,12 +347,12 @@ Goal: get the frontend green after the visual build, then document it.
 2. **Real Meta test number.** Flip a number from simulator to Meta using the
    Settings credentials and exercise the full inbound → automation → AI → outbound
    loop. The deployment runbook lists the webhook setup.
-3. **Finish phase 10:** add error tracking/monitoring and decide whether load
-   testing or automated backup scheduling is in scope.
+3. **Integrations:** connect a real HubSpot/Shopify account (or a test store) from
+   the Integrations page; the mock-provider tests prove the adapter seam, not the
+   live vendor credentials.
 4. **Phase 9 leftovers (optional):** arbitrary date ranges, CSV export, log
    retention policy.
-5. **Integrations (phase 7)** ships only the interface — add real CRM/ecommerce
-   adapters only when asked.
+5. **Phase 8 (MCP)** and phases 6/11 only on explicit request.
 
 Do **not** start phases 6, 8, or 11 without an explicit request.
 
@@ -334,6 +367,9 @@ Do **not** start phases 6, 8, or 11 without an explicit request.
 - **Providers are seams:** Meta lives in `services/whatsapp/*`; the AI provider in
   `services/ai/provider.js`; CRM/ecommerce/MCP behind `services/integrations`.
   Keep new provider code inside these.
+- **Integration credentials** are encrypted JSON on the `Integration` row. Resolve
+  them with `resolveAdapter({ organizationId, category })`; never read the row
+  from a controller or return credentials.
 - **One responder per conversation:** `ai` / `human` / `paused`. Human takeover
   must stop the AI immediately.
 - **Webhooks stay fast and idempotent:** persist → queue → return; repeated Meta

@@ -1,6 +1,7 @@
 import { ForbiddenError, NotFoundError, ValidationError } from "../../lib/errors.js";
 import { validateSchema } from "../../lib/validate.js";
 import { internalTools } from "./internal.js";
+import { integrationTools } from "./integrations.js";
 
 /**
  * Tool registry.
@@ -69,4 +70,4 @@ export async function executeTool({ name, args = {}, context, permissions = ["re
   return tool.execute({ args, context, tool });
 }
 
-for (const tool of internalTools) registerTool(tool);
+for (const tool of [...internalTools, ...integrationTools]) registerTool(tool);

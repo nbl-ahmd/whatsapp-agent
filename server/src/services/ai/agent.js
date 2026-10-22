@@ -8,6 +8,7 @@ import { sendTextMessage } from "../messages/outbound.js";
 import { executeTool, getTool } from "../tools/registry.js";
 import { chatCompletion } from "./provider.js";
 import { getAiConfig } from "../settings/index.js";
+import { listActiveCategories } from "../integrations/index.js";
 
 export const descriptor = Object.freeze({
   name: "ai",
@@ -76,14 +77,22 @@ export async function runAgentForConversation({ organizationId, conversationId, 
   const agent = await getActiveAgent({ organizationId });
   if (!agent) return { skipped: "no-active-agent" };
 
-  const [contact, organization, history, aiConfig] = await Promise.all([
+  const [contact, organization, history, aiConfig, activeCategories] = await Promise.all([
     prisma.contact.findFirst({ where: { id: conversation.contactId, organizationId } }),
     prisma.organization.findUnique({ where: { id: organizationId } }),
     listConversationMessages({ organizationId, conversationId, take: HISTORY_LIMIT }),
     getAiConfig({ organizationId }),
+    listActiveCategories({ organizationId }),
   ]);
 
-  const enabledTools = agent.tools.filter((tool) => tool.isActive && getTool(tool.name));
+  const categoryToolPrefix = { crm_: "crm", ecommerce_: "ecommerce" };
+  const enabledTools = agent.tools.filter((tool) => {
+    if (!tool.isActive || !getTool(tool.name)) return false;
+    for (const [prefix, category] of Object.entries(categoryToolPrefix)) {
+      if (tool.name.startsWith(prefix)) return activeCategories.has(category);
+    }
+    return true;
+  });
   const permissions = new Set(enabledTools.map((tool) => tool.permission || "read"));
   const toolDefinitions = enabledTools.map((tool) => ({
     name: tool.name,

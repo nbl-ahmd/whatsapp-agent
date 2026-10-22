@@ -1,4 +1,5 @@
 import { logger } from "../lib/logger.js";
+import { reportError } from "../lib/errorReporter.js";
 import { sendError } from "../utils/http.js";
 
 export function notFound(req, res) {
@@ -18,5 +19,18 @@ export function errorHandler(error, req, res, _next) {
     });
   }
 
+  reportUnhandled(error, req);
   return sendError(res, error, { requestId: req.id });
+}
+
+/** Report unexpected (non-AppError) failures to the optional error webhook. */
+export function reportUnhandled(error, req) {
+  if (error?.isAppError) return;
+  void reportError({
+    error,
+    requestId: req?.id,
+    method: req?.method,
+    path: req?.originalUrl,
+    organizationId: req?.auth?.organizationId,
+  });
 }

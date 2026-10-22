@@ -5,6 +5,75 @@ Newest first. Each checkpoint records **what changed**, **how it was verified**,
 
 ---
 
+## 2026-10-22 · CRM/ecommerce adapters (phase 7)
+
+**Goal.** Turn the integration interface into working providers and AI tools.
+
+**Done.**
+
+- **Registry + adapters.** `services/integrations/registry.js` holds provider
+  factories and form field metadata. HubSpot CRM (`findCustomer`,
+  `createCustomer`, `updateCustomer`, `addNote`, `createLead`) and Shopify
+  ecommerce (`searchProducts`, `getProduct`, `getOrder`, `listOrders`,
+  `createOrder`, `cancelOrder`) are registered in `adapters/index.js`.
+- **Connections.** Create/update/delete/test APIs with admin-only writes. Secret
+  fields are AES-GCM encrypted at rest; list responses include only flags and
+  non-secret config. Every provider request is timeout-bounded and maps upstream
+  failures to `502` without leaking tokens.
+- **AI tools.** `crm_find_customer`, `crm_create_lead`,
+  `ecommerce_search_products`, `ecommerce_get_order`,
+  `ecommerce_list_orders` resolve the org's active integration per call, so the
+  model never sees a vendor name.
+- **UI.** Integrations page can connect a provider, test it, remove it, and shows
+  the registered provider labels.
+- **Tests.** Mock HubSpot/Shopify server covers auth headers, mapping, connection
+  tests, encrypted credentials, tool execution and the missing-integration error.
+
+**Verified.**
+
+- `npm test` → **74/74** pass.
+- `npm run lint` → clean.
+- `npm run build` → passes.
+
+**Left.**
+
+1. Live provider credentials (HubSpot private app / Shopify custom app) have not
+   been exercised; the adapter contract is covered by the mock server.
+2. MCP is phase 8 and stays deferred.
+3. Human visual pass on the Integrations form.
+
+---
+
+## 2026-10-22 · Production readiness leftovers (phase 10)
+
+**Goal.** Close the monitoring, load-test and backup gaps left in phase 10.
+
+**Done.**
+
+- **Error webhook.** `lib/errorReporter.js` POSTs unhandled failures to
+  `ERROR_WEBHOOK_URL` with request id, route, organization id and a short stack.
+  No bodies/headers; throttled to one report per 5 s; best-effort. Hooked into the
+  HTTP error handler and queue failures.
+- **Backup script.** `server/scripts/backup-db.sh` + `npm run db:backup` writes a
+  custom-format `pg_dump` into `backups/` and prunes files older than
+  `RETENTION_DAYS` (default 7). The directory is gitignored.
+- **Load test.** `server/scripts/load-webhook.mjs` + `npm run load:webhook` sends
+  signed, unique inbound webhooks and reports throughput, p50/p95 and statuses.
+- **Docs.** DEPLOYMENT covers the error webhook, a cron example for backups and a
+  staging load-test procedure; README lists the new scripts.
+- **Tests.** `server/tests/errorReporter.test.js` covers the disabled path, payload
+  shape, secret-free fields and throttling.
+
+**Verified.**
+
+- `npm test` → **72/72** pass.
+- `node --check` / `sh -n` on the new scripts.
+- `npm run lint` and `npm run build` → clean.
+
+**Left.** Phase 7 adapters next; phases 6/8/11 stay deferred until requested.
+
+---
+
 ## 2026-10-22 · Analytics activity (phase 9 complete for MVP)
 
 **Goal.** Make the dashboard's volume chart report real message traffic instead of

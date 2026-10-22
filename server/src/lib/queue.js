@@ -1,4 +1,5 @@
 import { logger } from "./logger.js";
+import { reportError } from "./errorReporter.js";
 
 /**
  * Queue abstraction.
@@ -57,6 +58,7 @@ class QueueService {
         topic: job.topic,
         error: error?.message,
       });
+      void reportError({ error, path: `queue:${job.topic}` });
     }
   }
 }

@@ -20,7 +20,9 @@
     "db:migrate": "npm --prefix server run db:migrate",
     "db:deploy": "npm --prefix server run db:deploy",
     "db:seed": "npm --prefix server run db:seed",
-    "db:studio": "npm --prefix server run db:studio"
+    "db:studio": "npm --prefix server run db:studio",
+    "db:backup": "npm --prefix server run db:backup",
+    "load:webhook": "npm --prefix server run load:webhook"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",

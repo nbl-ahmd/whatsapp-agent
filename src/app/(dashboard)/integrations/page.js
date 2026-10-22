@@ -1,18 +1,25 @@
 "use client";
 
+import { useState } from "react";
 import {
   Boxes,
   Cable,
   CalendarClock,
+  CheckCircle2,
   Clock,
+  Loader2,
   Plug,
+  Plus,
   RefreshCw,
   ShoppingCart,
   Sparkles,
+  Trash2,
   Users,
 } from "lucide-react";
+import { api } from "@/lib/api";
 import { useResource } from "@/lib/useResource";
 import { formatRelative, titleCase } from "@/lib/format";
+import { useAuth } from "@/components/AuthProvider";
 import {
   EmptyState,
   ErrorAlert,
@@ -23,11 +30,19 @@ import {
 } from "@/components/ui";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 /**
- * Integrations: the adapter seam the AI tools will call. Phase 7 ships the real
- * CRM/ecommerce/MCP providers; this page shows the contract and what an
- * organization has connected so far.
+ * Integrations: connect a CRM/ecommerce provider; the AI only ever sees the
+ * generic tools. Credentials are write-only and encrypted at rest.
  */
 
 const CATALOG = [
@@ -35,36 +50,82 @@ const CATALOG = [
     category: "crm",
     name: "CRM",
     icon: Users,
-    summary: "Read and write customer records in your CRM of record.",
+    providers: "HubSpot",
+    summary: "Read and write customer records, notes and leads.",
     methods: ["findCustomer", "createCustomer", "updateCustomer", "addNote", "createLead"],
   },
   {
     category: "ecommerce",
     name: "Ecommerce",
     icon: ShoppingCart,
-    summary: "Products, orders and checkout, answered from the store, never guessed.",
+    providers: "Shopify",
+    summary: "Products, orders and cancellations, answered from the store.",
     methods: ["searchProducts", "getProduct", "getOrder", "listOrders", "createOrder", "cancelOrder"],
   },
   {
     category: "mcp",
     name: "MCP tools",
     icon: Boxes,
+    providers: "Phase 8",
     summary: "Bring external tool servers in behind the same tool abstraction.",
     methods: ["listTools", "callTool"],
   },
 ];
 
-const STATUS_TONE = { connected: "green", active: "green", error: "red", pending: "amber" };
+const STATUS_TONE = { active: "green", inactive: "zinc", error: "red" };
+const ADMIN_ROLES = ["OWNER", "ADMIN"];
 
 export default function IntegrationsPage() {
+  const { user } = useAuth();
+  const isAdmin = ADMIN_ROLES.includes(user?.role);
   const integrations = useResource("/api/integrations");
+
+  const [notice, setNotice] = useState(null);
+  const [actionError, setActionError] = useState(null);
+  const [busyId, setBusyId] = useState(null);
+
   const rows = integrations.data?.integrations ?? [];
+  const providers = integrations.data?.providers ?? [];
+
+  async function testConnection(row) {
+    setBusyId(row.id);
+    setNotice(null);
+    setActionError(null);
+    try {
+      const result = await api.post(`/api/integrations/${row.id}/test`);
+      setNotice(
+        `${row.providerLabel} responded${result?.detail?.shop ? ` (${result.detail.shop})` : ""}. Connection is healthy.`,
+      );
+      integrations.reload();
+    } catch (error) {
+      setActionError(error);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function removeConnection(row) {
+    if (!window.confirm(`Disconnect ${row.name}? Stored credentials will be deleted.`)) return;
+
+    setBusyId(row.id);
+    setNotice(null);
+    setActionError(null);
+    try {
+      await api.del(`/api/integrations/${row.id}`);
+      setNotice(`${row.name} disconnected.`);
+      integrations.reload();
+    } catch (error) {
+      setActionError(error);
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   return (
     <div className="space-y-5">
       <PageHeader
         title="Integrations"
-        description="CRM, ecommerce and MCP providers behind stable adapters. Credentials are stored encrypted and never exposed to the browser."
+        description="Connect the CRM and store the AI may use. Credentials are encrypted and never exposed to the browser."
         actions={
           <Button variant="outline" onClick={integrations.reload}>
             <RefreshCw />
@@ -73,7 +134,13 @@ export default function IntegrationsPage() {
         }
       />
 
-      <ErrorAlert error={integrations.error} />
+      <ErrorAlert error={integrations.error ?? actionError} />
+      {notice ? (
+        <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300">
+          <CheckCircle2 className="size-4" />
+          {notice}
+        </div>
+      ) : null}
 
       <SectionCard
         title="Connected for this organization"
@@ -85,14 +152,14 @@ export default function IntegrationsPage() {
           <EmptyState
             icon={Plug}
             title="Nothing connected yet"
-            description="Adapter providers arrive in phase 7. The contract below is already wired into the tool layer, so providers drop in without touching the AI agent."
+            description="Connect a provider below. The AI keeps working without one; CRM and order tools only become available after a connection exists."
           />
         ) : (
           <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {rows.map((row) => (
               <li key={row.id}>
                 <Card className="h-full gap-3 py-4">
-                  <CardContent className="space-y-3">
+                  <CardContent className="flex h-full flex-col gap-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-2.5">
                         <span className="grid size-9 place-items-center rounded-lg bg-primary/10 text-primary">
@@ -100,29 +167,83 @@ export default function IntegrationsPage() {
                         </span>
                         <div>
                           <p className="text-sm font-semibold">{row.name}</p>
-                          <p className="text-xs text-muted-foreground">{row.provider}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {row.providerLabel}
+                            {row.config?.shopDomain ? ` · ${row.config.shopDomain}` : ""}
+                          </p>
                         </div>
                       </div>
                       <StatusBadge tone={STATUS_TONE[row.status] ?? "zinc"}>
                         {titleCase(row.status)}
                       </StatusBadge>
                     </div>
+
                     <div className="flex flex-wrap gap-1.5">
                       <StatusBadge tone="indigo">{row.category}</StatusBadge>
                       <StatusBadge tone={row.hasCredentials ? "green" : "amber"}>
                         credentials {row.hasCredentials ? "stored" : "missing"}
                       </StatusBadge>
                     </div>
+
                     {row.updatedAt ? (
                       <p className="text-xs text-muted-foreground">
                         Updated {formatRelative(row.updatedAt)}
                       </p>
+                    ) : null}
+
+                    {isAdmin ? (
+                      <div className="mt-auto flex gap-2 pt-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={busyId === row.id}
+                          onClick={() => testConnection(row)}
+                        >
+                          {busyId === row.id ? <Loader2 className="animate-spin" /> : null}
+                          Test
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={busyId === row.id}
+                          onClick={() => removeConnection(row)}
+                        >
+                          <Trash2 />
+                          Remove
+                        </Button>
+                      </div>
                     ) : null}
                   </CardContent>
                 </Card>
               </li>
             ))}
           </ul>
+        )}
+      </SectionCard>
+
+      <SectionCard
+        title="Connect a provider"
+        description="Secrets are encrypted at rest and only ever sent from the server to the provider."
+      >
+        {!isAdmin ? (
+          <p className="text-sm text-muted-foreground">
+            Only owners and admins can add or change integrations.
+          </p>
+        ) : providers.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No providers are registered on this server.</p>
+        ) : (
+          <ConnectForm
+            providers={providers}
+            onSaved={(message) => {
+              setNotice(message);
+              setActionError(null);
+              integrations.reload();
+            }}
+            onError={(error) => {
+              setActionError(error);
+              setNotice(null);
+            }}
+          />
         )}
       </SectionCard>
 
@@ -148,7 +269,7 @@ export default function IntegrationsPage() {
                       </div>
                       <StatusBadge tone="zinc" className="ml-auto">
                         <Clock className="size-3" />
-                        phase 7
+                        {entry.providers}
                       </StatusBadge>
                     </div>
                     <p className="text-sm text-muted-foreground">{entry.summary}</p>
@@ -190,6 +311,116 @@ export default function IntegrationsPage() {
         </div>
       </SectionCard>
     </div>
+  );
+}
+
+function ConnectForm({ providers, onSaved, onError }) {
+  const [providerKey, setProviderKey] = useState("");
+  const [name, setName] = useState("");
+  const [values, setValues] = useState({});
+  const [pending, setPending] = useState(false);
+
+  const selected = providers.find((entry) => `${entry.category}:${entry.provider}` === providerKey);
+
+  function chooseProvider(value) {
+    setProviderKey(value);
+    const provider = providers.find((entry) => `${entry.category}:${entry.provider}` === value);
+    setName(provider?.label ?? "");
+    setValues({});
+  }
+
+  function change(field, value) {
+    setValues((current) => ({ ...current, [field]: value }));
+  }
+
+  async function submit(event) {
+    event.preventDefault();
+    if (!selected) return;
+
+    setPending(true);
+    try {
+      await api.post("/api/integrations", {
+        category: selected.category,
+        provider: selected.provider,
+        name: name || selected.label,
+        fields: values,
+      });
+      setProviderKey("");
+      setName("");
+      setValues({});
+      onSaved(`${selected.label} connected.`);
+    } catch (error) {
+      onError(error);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="space-y-4">
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label>Provider</Label>
+          <Select value={providerKey} onValueChange={chooseProvider}>
+            <SelectTrigger>
+              <SelectValue placeholder="Choose a provider" />
+            </SelectTrigger>
+            <SelectContent>
+              {providers.map((entry) => (
+                <SelectItem key={`${entry.category}:${entry.provider}`} value={`${entry.category}:${entry.provider}`}>
+                  {entry.label} · {entry.category}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {selected ? <p className="text-xs text-muted-foreground">{selected.description}</p> : null}
+        </div>
+
+        {selected ? (
+          <div className="space-y-2">
+            <Label htmlFor="integration-name">Connection name</Label>
+            <Input
+              id="integration-name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder={selected.label}
+              maxLength={120}
+            />
+            <p className="text-xs text-muted-foreground">
+              Used on this page only; the AI tool does not depend on it.
+            </p>
+          </div>
+        ) : null}
+      </div>
+
+      {selected ? (
+        <div className="grid gap-4 md:grid-cols-2">
+          {selected.fields.map((field) => (
+            <div key={field.name} className="space-y-2">
+              <Label htmlFor={`field-${field.name}`}>
+                {field.label}
+                {field.required ? <span className="text-destructive"> *</span> : null}
+              </Label>
+              <Input
+                id={`field-${field.name}`}
+                type={field.type === "password" ? "password" : field.type === "url" ? "url" : "text"}
+                value={values[field.name] ?? ""}
+                onChange={(event) => change(field.name, event.target.value)}
+                placeholder={field.placeholder ?? ""}
+                required={field.required}
+                autoComplete={field.secret ? "new-password" : "off"}
+              />
+              {field.hint ? <p className="text-xs text-muted-foreground">{field.hint}</p> : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      <Button type="submit" disabled={!selected || pending}>
+        {pending ? <Loader2 className="animate-spin" /> : <Plus />}
+        Connect
+      </Button>
+    </form>
   );
 }
 

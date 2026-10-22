@@ -10,6 +10,8 @@
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
     "test": "node --test tests/*.test.js",
+    "load:webhook": "node scripts/load-webhook.mjs",
+    "db:backup": "sh scripts/backup-db.sh",
     "postinstall": "prisma generate --config prisma.config.mjs",
     "db:generate": "prisma generate --config prisma.config.mjs",
     "db:validate": "prisma validate --config prisma.config.mjs",

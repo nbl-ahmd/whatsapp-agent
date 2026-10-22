@@ -87,6 +87,7 @@ LOG_LEVEL=info
 AUTH_TOKEN_TTL_HOURS=168
 REDIS_URL=          # only if the queue driver is switched from in-process
 WHATSAPP_TEST_API_KEY=   # only for unauthenticated server-to-server sends
+ERROR_WEBHOOK_URL=  # optional JSON POST target for unhandled errors
 
 # Process-local rate limits (defaults shown)
 AUTH_RATE_LIMIT_MAX=20
@@ -176,7 +177,15 @@ Take a logical backup with `pg_dump` (custom format, no owner/ACL so it restores
 into any role):
 
 ```bash
-pg_dump --format=custom --no-owner --no-acl "$DATABASE_URL" > whatsapp-$(date +%F).dump
+cd server
+DATABASE_URL='postgresql://...' npm run db:backup
+```
+
+The script writes `backups/whatsapp-<UTC timestamp>.dump` and deletes dumps older
+than `RETENTION_DAYS` (default 7). Schedule it daily, for example:
+
+```cron
+0 2 * * * cd /srv/whatsapp-agent/server && DATABASE_URL='postgresql://...' BACKUP_DIR=/var/backups/whatsapp npm run db:backup
 ```
 
 Restore into an empty database:
@@ -213,6 +222,9 @@ Operational rules:
 
 - Render health check: `/health/ready` (503 = database unreachable).
 - Render logs are JSON lines; secrets are redacted by `server/src/lib/logger.js`.
+- Set `ERROR_WEBHOOK_URL` to receive a JSON POST (with `requestId`, route and a
+  short stack) for unhandled failures. Delivery is best-effort, throttled to one
+  report per 5 seconds, and never blocks the response.
 - Watch for repeated `Queue handler failed` and webhook `401`/`403` entries —
   the first means automation/AI work is failing, the second means the app secret
   is wrong.
@@ -236,6 +248,24 @@ Run the same checks locally before pushing:
 ```bash
 npm run lint && npm run build && npm test
 ```
+
+### Webhook load test
+
+`server/scripts/load-webhook.mjs` sends signed, unique inbound messages to a
+running API and reports throughput, p50/p95 latency and status counts:
+
+```bash
+cd server
+WEBHOOK_URL=https://<render-service>/api/webhooks/whatsapp \
+WHATSAPP_APP_SECRET=... \
+WHATSAPP_PHONE_NUMBER_ID=... \
+LOAD_MESSAGES=500 LOAD_CONCURRENCY=20 \
+npm run load:webhook
+```
+
+Use a staging service and a dedicated test number. Every message id is unique, so
+the run also exercises the normal persist → queue path rather than only
+idempotency. Investigate before running it against production customer traffic.
 
 ---
 

@@ -42,6 +42,9 @@ export const env = {
 
   logLevel: optional("LOG_LEVEL", "info"),
 
+  // Optional POST target for unhandled server errors (Phase 10 monitoring).
+  errorWebhookUrl: optional("ERROR_WEBHOOK_URL"),
+
   // Session tokens. Falls back to ENCRYPTION_KEY so a local .env only needs one
   // generated secret; both must be set explicitly in production.
   authSecret: optional("AUTH_SECRET", optional("ENCRYPTION_KEY")),

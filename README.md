@@ -3,12 +3,11 @@
 Multi-tenant WhatsApp automation platform built on the Meta WhatsApp Cloud API.
 See [AGENTS.md](./AGENTS.md) for the domain architecture and phased plan.
 
-Current status: **Phases 1–5 complete** — multi-tenant auth, WhatsApp Cloud API
-send/receive with inbound media, contacts/conversations/inbox, the automation
-engine, and a provider-neutral AI agent with tools. The app is split into a
-**Next.js frontend** and a **standalone Node/Express backend**. Phase 10
-(production readiness) is in progress: CI, readiness probe and a
-[deployment runbook](./docs/DEPLOYMENT.md) are in place.
+Current status: **Phases 1–5 complete**, plus phase 7 CRM/ecommerce adapters
+(HubSpot, Shopify), phase 9 security/analytics and phase 10 production readiness
+for the MVP. WhatsApp Flows (6), MCP (8) and Embedded Signup (11) stay deferred
+until explicitly requested. The app is split into a **Next.js frontend** and a
+**standalone Node/Express backend**.
 
 ## Architecture
 
@@ -134,6 +133,8 @@ No secret is ever prefixed with `NEXT_PUBLIC_`.
 | `npm run lint` | ESLint (frontend) |
 | `npm test` | Test suite (node:test) |
 | `npm run db:generate` / `db:validate` / `db:push` / `db:migrate` / `db:deploy` / `db:seed` / `db:studio` | Prisma tasks |
+| `npm run db:backup` | `pg_dump` backup with retention (`server/scripts/backup-db.sh`) |
+| `npm run load:webhook` | Signed webhook load test (`server/scripts/load-webhook.mjs`) |
 
 ## Backend API
 
@@ -146,6 +147,11 @@ No secret is ever prefixed with `NEXT_PUBLIC_`.
 | `POST` | `/api/whatsapp/messages` | Send text/image/document/template/interactive (session or `WHATSAPP_TEST_API_KEY`) |
 | `GET` | `/api/whatsapp/templates?phoneNumberId=…` | Approved templates for the number's WABA |
 | `GET` | `/api/whatsapp/media/:messageId` | Stream inbound media using the tenant's Meta token |
+| `GET` | `/api/integrations` | Connected CRM/ecommerce providers + provider catalog |
+| `POST` | `/api/integrations` | Connect a provider (admin; credentials encrypted) |
+| `PATCH` | `/api/integrations/:id` | Rotate credentials or toggle a connection (admin) |
+| `DELETE` | `/api/integrations/:id` | Disconnect and delete stored credentials (admin) |
+| `POST` | `/api/integrations/:id/test` | One cheap provider call to verify the connection (admin) |
 
 Send a test message:
 
