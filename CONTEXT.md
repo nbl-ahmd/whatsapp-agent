@@ -72,9 +72,9 @@ API is down, start it with `npm run dev:api`. The web app runs with `npm run dev
 
 - `npm run lint` → clean.
 - `npm run build` → succeeds; all 12 routes prerender.
-- `npm test` → **74/74** pass (auth, analytics, automation, crypto, database integration,
-  error reporter, integrations/adapters, messaging, pipeline integration, http incl.
-  readiness, security/rate limits, tenant scoping, tools, settings, whatsapp
+- `npm test` → **76/76** pass (auth, analytics, automation, CORS, crypto, database
+  integration, error reporter, integrations/adapters, messaging, pipeline integration,
+  http incl. readiness, security/rate limits, tenant scoping, tools, settings, whatsapp
   normalize/verify/integration, media proxy).
 - Manual HTTP E2E on throwaway orgs: text send → conversation → reply; template
   send; media proxy rejects a text message with a clear 404; template listing on a
@@ -160,6 +160,19 @@ and the public `webhooks/whatsapp`. Outside `/api`: `GET /health` (liveness) and
 ---
 
 ## 7. What recent sessions changed
+
+### 2026-10-22 · Deployed CORS fix
+
+1. **Diagnosis.** A deployed register attempt reached Render but the browser
+   blocked it: `FRONTEND_URL` did not match the Vercel `Origin` (unset,
+   localhost, trailing slash, or a preview hostname).
+2. **CORS.** Origins are normalized and constrained patterns
+   (`https://*.vercel.app`) are supported; bare `*` is rejected. Blocked origins
+   are logged once and preflights from them return `403`.
+3. **Visibility.** Boot warns when production `FRONTEND_URL` is localhost; the
+   frontend reports the API URL and the env checklist instead of "Failed to
+   fetch". `docs/DEPLOYMENT.md` has the troubleshooting steps and a curl check.
+4. **Tests.** `server/tests/cors.test.js`; suite is 76/76.
 
 ### 2026-10-22 · CRM/ecommerce adapters (phase 7)
 
@@ -362,6 +375,10 @@ Do **not** start phases 6, 8, or 11 without an explicit request.
 
 - **Tenancy:** never accept an organization id from the browser. Identity comes
   from the bearer token; the backend resolves the org. Frontend sends no org id.
+- **CORS:** `FRONTEND_URL` is an exact-origin allowlist (comma separated); a
+  trailing slash is ignored and `https://*.vercel.app` works for previews. Never
+  use a bare `*`. Vercel preview URLs change per deployment — prefer adding the
+  pattern, then narrow it when the custom domain is live.
 - **Secrets:** Meta tokens and integration secrets are encrypted at rest in the
   backend and never returned to the browser. No secret is ever `NEXT_PUBLIC_*`.
 - **Providers are seams:** Meta lives in `services/whatsapp/*`; the AI provider in

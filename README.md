@@ -214,7 +214,9 @@ encrypted at rest with `server/src/lib/crypto.js` (`ENCRYPTION_KEY`).
 
 ## Security notes
 
-- Browser origins allowed by CORS come from `FRONTEND_URL`; no wildcard.
+- Browser origins allowed by CORS come from `FRONTEND_URL`; no wildcard `*`.
+  Exact origins and constrained preview patterns (`https://*.vercel.app`) are
+  supported; the request origin is always reflected, never replaced with `*`.
 - Meta/DB/AI secrets live only in the backend; BYOK credentials are AES-GCM
   encrypted at rest and returned to the browser only as "configured" flags.
 - `WHATSAPP_APP_SECRET` enables webhook HMAC verification; when unset the

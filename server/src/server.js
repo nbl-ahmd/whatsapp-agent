@@ -5,6 +5,13 @@ import { startWorkers } from "./services/workers/index.js";
 
 const app = createApp();
 
+if (env.isProduction && /localhost|127\.0\.0\.1/.test(env.frontendUrl)) {
+  logger.warn(
+    "FRONTEND_URL still points at localhost; set it to the deployed Vercel origin or browser requests will fail CORS",
+    { frontendUrl: env.frontendUrl },
+  );
+}
+
 // In-process background consumers (automations, AI, outbound). Swap the queue
 // driver for Redis/BullMQ without changing this call site.
 const workers = startWorkers();

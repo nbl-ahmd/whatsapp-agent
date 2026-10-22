@@ -31,22 +31,38 @@ export class ApiError extends Error {
 }
 
 /**
+ * A network/CORS failure has no HTTP status, so make the likely cause and the
+ * exact API URL visible instead of the browser's generic "Failed to fetch".
+ */
+function networkError() {
+  return new ApiError(
+    `Cannot reach the API at ${API_URL}. Check NEXT_PUBLIC_API_URL on Vercel and FRONTEND_URL on the backend.`,
+    { status: 0, code: "NETWORK_ERROR" },
+  );
+}
+
+/**
  * @param {string} path e.g. "/api/conversations"
  * @param {{ method?: string, body?: unknown, headers?: Record<string,string>, auth?: boolean }} [options]
  */
 export async function apiFetch(path, { method = "GET", body, headers, auth = true, ...rest } = {}) {
   const token = auth ? getToken() : null;
 
-  const response = await fetch(apiUrl(path), {
-    method,
-    headers: {
-      ...(body !== undefined ? { "content-type": "application/json" } : {}),
-      ...(token ? { authorization: `Bearer ${token}` } : {}),
-      ...headers,
-    },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-    ...rest,
-  });
+  let response;
+  try {
+    response = await fetch(apiUrl(path), {
+      method,
+      headers: {
+        ...(body !== undefined ? { "content-type": "application/json" } : {}),
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+        ...headers,
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      ...rest,
+    });
+  } catch {
+    throw networkError();
+  }
 
   const text = await response.text();
   let data = null;
@@ -80,9 +96,14 @@ export async function apiFetch(path, { method = "GET", body, headers, auth = tru
  */
 export async function apiBlob(path) {
   const token = getToken();
-  const response = await fetch(apiUrl(path), {
-    headers: token ? { authorization: `Bearer ${token}` } : {},
-  });
+  let response;
+  try {
+    response = await fetch(apiUrl(path), {
+      headers: token ? { authorization: `Bearer ${token}` } : {},
+    });
+  } catch {
+    throw networkError();
+  }
 
   if (!response.ok) {
     if (response.status === 401) clearSession();

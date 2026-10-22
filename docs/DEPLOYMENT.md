@@ -56,7 +56,7 @@ unreachable. Use `/health/ready` for the platform health check.
 | `ENCRYPTION_KEY` | `openssl rand -hex 32`. Encrypts stored credentials. **Losing or rotating this makes saved credentials unreadable.** |
 | `AUTH_SECRET` | `openssl rand -hex 32`. Signs session tokens. Falls back to `ENCRYPTION_KEY`; set it explicitly. |
 | `NODE_ENV` | `production` |
-| `FRONTEND_URL` | Vercel origin, e.g. `https://app.example.com`. Comma-separate multiple origins. No wildcard. |
+| `FRONTEND_URL` | Vercel origin(s), e.g. `https://app.example.com`. Comma-separate multiple origins. A trailing slash is ignored. Constrained preview patterns such as `https://*.vercel.app` are supported; a bare `*` is rejected. |
 
 `PORT` is injected by Render. Do not set it. `HOST` defaults to `0.0.0.0`.
 
@@ -170,6 +170,38 @@ If verification fails, confirm the token matches and that `FRONTEND_URL`/CORS is
 not blocking anything (the webhook itself is public and not CORS-gated).
 
 ---
+
+## Troubleshooting: CORS (`Failed to fetch`)
+
+The browser shows `Failed to fetch` when the API response is missing
+`Access-Control-Allow-Origin`. The request reached Render; the origin did not
+match `FRONTEND_URL`.
+
+1. **Read the exact browser origin.** DevTools → Network → the failing request →
+   Headers → `Origin` (for example `https://whatsapp-agent.vercel.app`).
+2. **Set `FRONTEND_URL` on Render** to that origin. Comma-separate multiple
+   origins. Do not include a path. A trailing slash is tolerated.
+   For Vercel preview deployments either add each preview URL or use a
+   constrained pattern: `https://*.vercel.app`.
+3. **Confirm `NEXT_PUBLIC_API_URL` on Vercel** is the Render base URL, e.g.
+   `https://whatsapp-api.onrender.com` — not localhost, not the Vercel URL, no
+   `/api` suffix.
+4. **Redeploy/restart both sides.** Render restarts on an env change; Vercel
+   inlines `NEXT_PUBLIC_API_URL` at build time, so it needs a new deployment.
+5. **Check the preflight:**
+
+   ```bash
+   curl -i -X OPTIONS https://<render-service>/api/auth/register \
+     -H 'Origin: https://<your-vercel-app>' \
+     -H 'Access-Control-Request-Method: POST'
+   ```
+
+   A healthy response is `204` with
+   `access-control-allow-origin: https://<your-vercel-app>`.
+
+Render logs now print `Blocked browser origin by CORS; check FRONTEND_URL` with
+the offending origin, and the API warns at boot when `FRONTEND_URL` still points
+at localhost.
 
 ## 6. Backups and restore
 

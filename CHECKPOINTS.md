@@ -5,6 +5,38 @@ Newest first. Each checkpoint records **what changed**, **how it was verified**,
 
 ---
 
+## 2026-10-22 · Deployed CORS failure fix
+
+**Symptom.** Registering from the deployed Vercel app showed `Failed to fetch`
+and the Network tab reported a CORS error on `POST /api/auth/register`.
+
+**Cause.** `FRONTEND_URL` on Render did not match the browser's exact `Origin`
+(defaults to `http://localhost:3000` when unset; a trailing slash or a Vercel
+preview hostname also fails an exact comparison).
+
+**Done.**
+
+- CORS origins are normalized (trailing slash/path tolerated) and support
+  constrained patterns such as `https://*.vercel.app`; a bare `*` is rejected.
+  The matched origin is still reflected, never `*`.
+- Preflight requests from unknown origins now return `403`; the first blocked
+  origin is logged as `Blocked browser origin by CORS; check FRONTEND_URL`.
+- The backend warns at boot when `FRONTEND_URL` still points at localhost in
+  production.
+- The frontend replaces the browser's `Failed to fetch` with the API URL and a
+  checklist pointing at `NEXT_PUBLIC_API_URL` / `FRONTEND_URL`.
+- `docs/DEPLOYMENT.md` has a CORS troubleshooting section with a `curl`
+  preflight check and the redeploy requirements.
+- New `server/tests/cors.test.js` covers exact origins, trailing slashes,
+  preview wildcards, rejection, preflight success and preflight `403`.
+
+**Verified.** `npm test` → **76/76**, lint clean, build passes.
+
+**Manual step.** Set Render's `FRONTEND_URL` to the Vercel origin, set Vercel's
+`NEXT_PUBLIC_API_URL` to the Render URL, then redeploy both.
+
+---
+
 ## 2026-10-22 · CRM/ecommerce adapters (phase 7)
 
 **Goal.** Turn the integration interface into working providers and AI tools.
