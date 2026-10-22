@@ -5,6 +5,42 @@ Newest first. Each checkpoint records **what changed**, **how it was verified**,
 
 ---
 
+## 2026-10-22 · Production readiness (phase 10)
+
+**Goal.** Start phase 10 with the parts a deployment actually needs: a real
+readiness probe, CI, and a runbook that covers migrations, backups and rollback.
+
+**Done.**
+
+- **Readiness probe.** `GET /health/ready` runs `SELECT 1` against PostgreSQL and
+  returns `503` with `{ status: "not_ready" }` when the database is unreachable.
+  `/health` remains a cheap liveness probe. Neither endpoint exposes connection
+  details.
+- **CI.** `.github/workflows/ci.yml` runs on pushes to `main` and pull requests:
+  frontend `npm ci` + lint + build, and backend tests against a PostgreSQL 16
+  service with migrations and seed applied first.
+- **Deployment runbook.** `docs/DEPLOYMENT.md` covers Vercel/Render settings,
+  required and optional env vars, pre-deploy migrations, Meta webhook setup,
+  `pg_dump`/`pg_restore` backups, `ENCRYPTION_KEY` escrow, rollback, monitoring
+  and a go-live checklist. README now points at it and documents `/health/ready`.
+- **Test.** Readiness route covered in `server/tests/server.http.test.js`,
+  including a check that the response contains no database URL.
+
+**Verified.**
+
+- `npm test` → **63/63** pass.
+- `npm run lint` → clean (frontend unchanged apart from README/docs).
+- Readiness route exercised through a real HTTP server with PostgreSQL connected.
+
+**Left.**
+
+1. Human visual pass at 1440 / ~1040 / 390px.
+2. End-to-end run against a real Meta test number.
+3. Phase 9 hardening (rate limiting, security headers, analytics depth).
+4. Phase 7 real adapters; phases 6/8/11 only on request.
+
+---
+
 ## 2026-10-22 · Inbound media, template picker, live chat
 
 **Goal.** Complete the WhatsApp loop that stopped at metadata: view inbound media,

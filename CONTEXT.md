@@ -68,12 +68,12 @@ API is down, start it with `npm run dev:api`. The web app runs with `npm run dev
 
 ---
 
-## 3. Verified state (2026-10-22, inbound media + chat + templates)
+## 3. Verified state (2026-10-22, production readiness started)
 
 - `npm run lint` → clean.
 - `npm run build` → succeeds; all 12 routes prerender.
-- `npm test` → **62/62** pass (auth, automation, crypto, database integration, messaging,
-  pipeline integration, http, tenant scoping, tools, settings, whatsapp
+- `npm test` → **63/63** pass (auth, automation, crypto, database integration, messaging,
+  pipeline integration, http incl. readiness, tenant scoping, tools, settings, whatsapp
   normalize/verify/integration, media proxy).
 - Manual HTTP E2E on throwaway orgs: text send → conversation → reply; template
   send; media proxy rejects a text message with a clear 404; template listing on a
@@ -85,8 +85,8 @@ API is down, start it with `npm run dev:api`. The web app runs with `npm run dev
   contrast failures**. (The detector cannot scan authenticated URLs; this is the
   substitute.)
 
-Working tree is **clean** as of `2817cbc`. Phases 1–5, the frontend and the docs
-are committed in four logical commits (see `CHECKPOINTS.md`, 2026-10-20).
+Working tree: the Phase 1–5 history is in `CHECKPOINTS.md`. The current work
+(readiness probe, CI, deployment runbook) is the latest checkpoint.
 
 ---
 
@@ -103,8 +103,8 @@ are committed in four logical commits (see `CHECKPOINTS.md`, 2026-10-20).
 | 6 WhatsApp Flows | not started (out of scope until asked) |
 | 7 CRM/ecommerce/MCP adapters | interface only — `services/integrations/index.js`, routes present; **Integrations page shows the adapter contract and connection records, but no provider adapters are registered** |
 | 8 MCP | not started |
-| 9 Logs/analytics/hardening | partial — logs + audit + dashboard counts exist |
-| 10 Testing/docs/prod prep | partial — tests exist; README + this doc |
+| 9 Logs/analytics/hardening | partial — logs + audit + dashboard counts exist; no rate limiting, security headers or analytics beyond today's counts |
+| 10 Testing/docs/prod prep | in progress — CI (frontend lint/build, backend tests on Postgres), `/health/ready`, `docs/DEPLOYMENT.md`; still missing load testing, error tracking and automated backups |
 | 11 Embedded Signup | not started (explicitly deferred) |
 
 Frontend pages (`src/app/(dashboard)/`): Dashboard, Inbox, Contacts, Automations,
@@ -153,11 +153,27 @@ Server endpoints (all under `/api`, tenant-scoped): `auth`, `organizations`,
 `settings` (BYOK credentials + AI test), `dashboard`, `contacts`, `conversations`,
 `automations`, `ai-agents`, `tools`, `integrations`, `logs`, `whatsapp` (incl.
 `numbers`, `accounts`, `templates`, `messages`, `media/:messageId`, `webhook-status`),
-and the public `webhooks/whatsapp`.
+and the public `webhooks/whatsapp`. Outside `/api`: `GET /health` (liveness) and
+`GET /health/ready` (database readiness).
 
 ---
 
 ## 7. What recent sessions changed
+
+### 2026-10-22 · Production readiness (phase 10, started)
+
+Goal: make the split deployment operable before adding more features.
+
+1. **Readiness.** `GET /health/ready` checks PostgreSQL with `SELECT 1` and returns
+   `503` when it cannot connect. `/health` stays a liveness probe. Neither leaks
+   connection strings. Render should use `/health/ready`.
+2. **CI.** `.github/workflows/ci.yml` lints and builds the frontend, and runs the
+   backend suite against a PostgreSQL 16 service after `db:deploy` + `db:seed`.
+3. **Runbook.** `docs/DEPLOYMENT.md` documents Vercel/Render settings, env vars,
+   pre-deploy migrations, Meta webhook setup, backups/restore (including
+   `ENCRYPTION_KEY` escrow), rollback and a go-live checklist.
+4. **Test.** Readiness is covered in `server/tests/server.http.test.js`; suite is
+   63/63.
 
 ### 2026-10-22 · Inbound media + chat + templates
 
@@ -259,15 +275,17 @@ Goal: get the frontend green after the visual build, then document it.
 
 1. **Human visual pass on the running app.** Sign in as `owner@acme.test` and walk
    Dashboard → Inbox → Contacts → Automations → AI Agents → WhatsApp → Settings →
-   Logs at 1440px, ~1040px and 390px. The new media bubbles and template pickers
+   Logs at 1440px, ~1040px and 390px. The media bubbles and template pickers
    have not been seen by a human yet.
-2. **Refresh `README.md`.** It still says "Phase 2", points at deleted components
-   (`SidebarNav`, `BackendStatus`, `config/modules.js`) and describes a
-   Vercel/Render split that no longer matches the repo.
-3. **Integrations (phase 7)** ships only the interface — add real CRM/ecommerce
+2. **Real Meta test number.** Flip a number from simulator to Meta using the
+   Settings credentials and exercise the full inbound → automation → AI → outbound
+   loop. The deployment runbook lists the webhook setup.
+3. **Finish phase 10:** add error tracking/monitoring and decide whether load
+   testing or automated backup scheduling is in scope.
+4. **Phase 9 hardening:** rate limiting on auth/webhook/send, security headers,
+   and analytics beyond today's counts.
+5. **Integrations (phase 7)** ships only the interface — add real CRM/ecommerce
    adapters only when asked.
-4. Optional: flip a number from simulator to Meta using the Settings credentials
-   and a Meta test number to exercise the real loop.
 
 Do **not** start phases 6, 8, or 11 without an explicit request.
 

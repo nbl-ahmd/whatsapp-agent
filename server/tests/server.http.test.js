@@ -40,6 +40,26 @@ test("GET /health returns ok without exposing internals", async () => {
   });
 });
 
+test(
+  "GET /health/ready reports database readiness without leaking config",
+  { skip: process.env.DATABASE_URL ? false : "DATABASE_URL is not configured" },
+  async () => {
+    await withServer(async (base) => {
+      const res = await fetch(`${base}/health/ready`);
+      assert.equal(res.status, 200);
+
+      const body = await res.json();
+      assert.equal(body.status, "ready");
+      assert.equal(body.checks.database, "ok");
+      assert.equal(typeof body.uptimeSeconds, "number");
+
+      const serialized = JSON.stringify(body);
+      assert.ok(!serialized.includes(process.env.DATABASE_URL));
+      assert.ok(!serialized.includes("postgresql://"));
+    });
+  },
+);
+
 test("GET /api/webhooks/whatsapp verifies the challenge", async () => {
   env.meta.verifyToken = VERIFY_TOKEN;
   await withServer(async (base) => {

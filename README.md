@@ -6,7 +6,9 @@ See [AGENTS.md](./AGENTS.md) for the domain architecture and phased plan.
 Current status: **Phases 1–5 complete** — multi-tenant auth, WhatsApp Cloud API
 send/receive with inbound media, contacts/conversations/inbox, the automation
 engine, and a provider-neutral AI agent with tools. The app is split into a
-**Next.js frontend** and a **standalone Node/Express backend**.
+**Next.js frontend** and a **standalone Node/Express backend**. Phase 10
+(production readiness) is in progress: CI, readiness probe and a
+[deployment runbook](./docs/DEPLOYMENT.md) are in place.
 
 ## Architecture
 
@@ -137,7 +139,8 @@ No secret is ever prefixed with `NEXT_PUBLIC_`.
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `GET` | `/health` | Render health check - returns `{ "status": "ok" }` |
+| `GET` | `/health` | Liveness probe - returns `{ "status": "ok" }` |
+| `GET` | `/health/ready` | Readiness probe - checks PostgreSQL, returns `503` when unreachable |
 | `GET` | `/api/webhooks/whatsapp` | Meta verification handshake |
 | `POST` | `/api/webhooks/whatsapp` | Meta inbound events (idempotent) |
 | `POST` | `/api/whatsapp/messages` | Send text/image/document/template/interactive (session or `WHATSAPP_TEST_API_KEY`) |
@@ -155,6 +158,10 @@ curl -X POST http://localhost:4000/api/whatsapp/messages \
 
 ## Deployment
 
+Full runbook: **[docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)** — environment
+variables, migrations, backups/restore, rollback, monitoring and the go-live
+checklist.
+
 **Frontend - Vercel** (root directory: repo root)
 
 - Build: `npm run build`, Output: Next.js default
@@ -163,14 +170,19 @@ curl -X POST http://localhost:4000/api/whatsapp/messages \
 
 **Backend - Render** (Web Service, root directory: `server`)
 
-- Build: `npm install`
+- Build: `npm ci --include=dev` (the Prisma CLI is a devDependency)
 - Start: `npm start` (runs `node src/server.js`)
+- Pre-deploy: `npm run db:deploy`
 - Env: all backend variables above; set `FRONTEND_URL=https://app.yourdomain.com`
-- Health check path: `/health`
+- Health check path: `/health/ready`
 
 **Database - PostgreSQL** (Render/Neon/RDS). Only the backend connects to it.
-Run `npm run db:deploy` from the repository root, or `npm run db:deploy` from
-the `server` directory, against the production database to apply migrations.
+Apply migrations with `npm run db:deploy` (from `server/` or the repo root).
+Never run `db:seed` in production: it creates demo logins with a known password.
+
+CI runs on every push to `main` and every pull request
+(`.github/workflows/ci.yml`): frontend lint + build, and backend tests against a
+PostgreSQL 16 service.
 
 ## Meta webhook configuration
 
