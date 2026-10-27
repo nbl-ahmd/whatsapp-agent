@@ -302,3 +302,125 @@ export function sendTemplateMessage({
     template: { name, language, components },
   });
 }
+
+/**
+ * Build the `components` array for sending a template that has a FLOW button.
+ * The parameter goes on the button, not the body, which is the part most
+ * hand-written payloads get wrong.
+ */
+export function buildFlowTemplateComponents({
+  flowToken = "unused",
+  flowActionData,
+  buttonIndex = 0,
+}) {
+  return [
+    {
+      type: "button",
+      sub_type: "flow",
+      index: String(buttonIndex),
+      parameters: [
+        {
+          type: "action",
+          action: {
+            ...(flowToken ? { flow_token: String(flowToken) } : {}),
+            ...(flowActionData !== undefined && flowActionData !== null
+              ? {
+                  flow_action_data:
+                    typeof flowActionData === "string"
+                      ? JSON.parse(flowActionData)
+                      : flowActionData,
+                }
+              : {}),
+          },
+        },
+      ],
+    },
+  ];
+}
+
+/**
+ * Send a Flow through a template. This is the path a Meta test number can use:
+ * test numbers only accept template messages outside a customer service window.
+ */
+export function sendFlowTemplateMessage({
+  organizationId,
+  phoneNumberId,
+  to,
+  name,
+  language = "en_US",
+  flowToken = "unused",
+  flowActionData,
+  buttonIndex = 0,
+}) {
+  return sendMessage({
+    organizationId,
+    phoneNumberId,
+    to,
+    type: "template",
+    template: {
+      name,
+      language,
+      components: buildFlowTemplateComponents({ flowToken, flowActionData, buttonIndex }),
+    },
+  });
+}
+
+/**
+ * Send an interactive Flow message (open the Flow from a CTA). Only works inside
+ * the 24-hour customer service window; business-initiated sends must use
+ * `sendFlowTemplateMessage`.
+ */
+export function sendFlowMessage({
+  organizationId,
+  phoneNumberId,
+  to,
+  flowId,
+  flowName,
+  flowCta = "Open",
+  flowToken = "unused",
+  flowAction = "navigate",
+  flowActionPayload,
+  mode = "published",
+  headerText,
+  bodyText,
+  footerText,
+}) {
+  if (!flowId && !flowName) {
+    throw new ValidationError("flowId or flowName is required");
+  }
+
+  const interactive = {
+    type: "flow",
+    ...(headerText ? { header: { type: "text", text: String(headerText) } } : {}),
+    ...(bodyText ? { body: { text: String(bodyText) } } : {}),
+    ...(footerText ? { footer: { text: String(footerText) } } : {}),
+    action: {
+      name: "flow",
+      parameters: {
+        flow_message_version: "3",
+        flow_cta: String(flowCta),
+        flow_token: String(flowToken),
+        mode,
+        ...(flowId ? { flow_id: String(flowId) } : { flow_name: String(flowName) }),
+        flow_action: flowAction,
+        ...(flowActionPayload
+          ? {
+              flow_action_payload:
+                typeof flowActionPayload === "string"
+                  ? JSON.parse(flowActionPayload)
+                  : flowActionPayload,
+            }
+          : {}),
+      },
+    },
+  };
+
+  return sendMessage({
+    organizationId,
+    phoneNumberId,
+    to,
+    type: "interactive",
+    interactive,
+  });
+}
+

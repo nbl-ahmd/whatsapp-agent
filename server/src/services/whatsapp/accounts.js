@@ -4,10 +4,16 @@ import { encryptSecret, isEncrypted } from "../../lib/crypto.js";
 import { ConflictError, NotFoundError, ValidationError } from "../../lib/errors.js";
 import { logger } from "../../lib/logger.js";
 import { asEnum, asString } from "../../lib/validate.js";
-import { getPhoneNumber as getPhoneNumberFromMeta, getTemplates as getTemplatesFromMeta } from "./service.js";
+import {
+  getPhoneNumber as getPhoneNumberFromMeta,
+  getTemplates as getTemplatesFromMeta,
+  getWaba,
+  getWabaPhoneNumbers,
+} from "./service.js";
+import { resolveMetaAccountContext } from "./context.js";
 import { PROVIDER_MODE } from "../messages/outbound.js";
 import { resolveAccessTokenForAccount } from "./credentials.js";
-import { getMetaConfig } from "../settings/index.js";
+import { getMetaConfig, updateCredentialSettings } from "../settings/index.js";
 
 /**
  * WhatsApp connection management: accounts, phone numbers, credentials.
@@ -98,20 +104,46 @@ export async function createAccount({
   });
   if (existing) throw new ConflictError("That WhatsApp phone number id is already connected");
 
+  const normalizedWabaId = asString(wabaId, "wabaId", { max: 64 });
   const fallback = accessToken ? null : await getMetaConfig({ organizationId });
   const hasToken = Boolean(accessToken || fallback?.accessToken);
 
-  const account = await prisma.whatsAppAccount.create({
-    data: {
-      organizationId,
-      name: accountName,
-      wabaId: asString(wabaId, "wabaId", { max: 64 }),
-      accessToken: accessToken ? encryptSecret(accessToken) : null,
-      appSecret: appSecret ? encryptSecret(appSecret) : null,
-      webhookVerifyToken: webhookVerifyToken ? encryptSecret(webhookVerifyToken) : null,
-      status: hasToken ? "ACTIVE" : "PENDING",
-    },
-  });
+  const secretData = {
+    accessToken: accessToken ? encryptSecret(accessToken) : undefined,
+    appSecret: appSecret ? encryptSecret(appSecret) : undefined,
+    webhookVerifyToken: webhookVerifyToken ? encryptSecret(webhookVerifyToken) : undefined,
+  };
+
+  // One WABA can own several numbers. Reuse its account instead of failing on
+  // the (organizationId, wabaId) unique constraint when adding the second one.
+  const existingAccount = normalizedWabaId
+    ? await prisma.whatsAppAccount.findFirst({
+        where: { organizationId, wabaId: normalizedWabaId },
+      })
+    : null;
+
+  const account = existingAccount
+    ? await prisma.whatsAppAccount.update({
+        where: { id: existingAccount.id },
+        data: {
+          name: accountName,
+          ...Object.fromEntries(
+            Object.entries(secretData).filter(([, value]) => value !== undefined),
+          ),
+          status: hasToken || existingAccount.accessToken ? "ACTIVE" : existingAccount.status,
+        },
+      })
+    : await prisma.whatsAppAccount.create({
+        data: {
+          organizationId,
+          name: accountName,
+          wabaId: normalizedWabaId,
+          accessToken: secretData.accessToken ?? null,
+          appSecret: secretData.appSecret ?? null,
+          webhookVerifyToken: secretData.webhookVerifyToken ?? null,
+          status: hasToken ? "ACTIVE" : "PENDING",
+        },
+      });
 
   const phoneNumber = await prisma.whatsAppPhoneNumber.create({
     data: {
@@ -136,6 +168,242 @@ export async function createAccount({
   });
 
   return serializePhoneNumber(phoneNumber);
+}
+
+const PHONE_STATUSES = ["PENDING", "CONNECTED", "FLAGGED", "DISCONNECTED"];
+
+function normalizePhoneStatus(raw) {
+  const value = String(raw ?? "").toUpperCase();
+  return PHONE_STATUSES.includes(value) ? value : "CONNECTED";
+}
+
+function serializeDiscoveredNumber(row) {
+  return {
+    phoneNumberId: row?.id ?? null,
+    displayPhoneNumber: row?.display_phone_number ?? null,
+    verifiedName: row?.verified_name ?? null,
+    qualityRating: row?.quality_rating ?? null,
+    status: row?.status ?? null,
+    platformType: row?.platform_type ?? null,
+    codeVerificationStatus: row?.code_verification_status ?? null,
+  };
+}
+
+function graphOptions(meta, accessToken) {
+  return {
+    accessToken,
+    baseUrl: meta.graphApiBaseUrl,
+    version: meta.graphApiVersion,
+  };
+}
+
+/** Resolve the token the connect UI is allowed to use. Never returns it. */
+async function resolveConnectionToken({ organizationId, accessToken }) {
+  const supplied = asString(accessToken, "accessToken", { max: 4096 });
+  const meta = await getMetaConfig({ organizationId });
+  const token = supplied || meta.accessToken;
+  if (!token) {
+    throw new ValidationError(
+      "No Meta access token. Paste one here or save it in Settings → API credentials.",
+    );
+  }
+  return { token, supplied, meta };
+}
+
+/**
+ * Ask Meta what numbers live under a WABA (or fetch one number by id) without
+ * persisting anything. Powers the "Find my test number" step in Settings.
+ */
+export async function discoverMetaNumbers({
+  organizationId,
+  accessToken = null,
+  wabaId = null,
+  phoneNumberId = null,
+}) {
+  const { token, supplied, meta } = await resolveConnectionToken({
+    organizationId,
+    accessToken,
+  });
+  const options = graphOptions(meta, token);
+  const waba = asString(wabaId, "wabaId", { max: 64 });
+  const singleNumberId = asString(phoneNumberId, "phoneNumberId", { max: 64 });
+
+  if (!waba && !singleNumberId) {
+    throw new ValidationError("Enter a WABA id or a phone number id");
+  }
+
+  try {
+    if (waba) {
+      const [wabaInfo, numbers] = await Promise.all([
+        getWaba(waba, options),
+        getWabaPhoneNumbers(waba, options),
+      ]);
+      const connected = await prisma.whatsAppPhoneNumber.findMany({
+        where: { organizationId },
+        select: { phoneNumberId: true },
+      });
+      return {
+        tokenSource: supplied ? "input" : meta.source.accessToken,
+        waba: {
+          id: wabaInfo?.id ?? waba,
+          name: wabaInfo?.name ?? null,
+          timezoneId: wabaInfo?.timezone_id ?? null,
+          accountReviewStatus: wabaInfo?.account_review_status ?? null,
+        },
+        phoneNumbers: (numbers?.data ?? []).map(serializeDiscoveredNumber),
+        connectedPhoneNumberIds: connected.map((row) => row.phoneNumberId),
+      };
+    }
+
+    const number = await getPhoneNumberFromMeta(singleNumberId, options);
+    return {
+      tokenSource: supplied ? "input" : meta.source.accessToken,
+      waba: null,
+      phoneNumbers: [serializeDiscoveredNumber(number)],
+      connectedPhoneNumberIds: [],
+    };
+  } catch (error) {
+    throw new ValidationError(`Meta could not read that WhatsApp account: ${error.message}`);
+  }
+}
+
+/**
+ * Connect a number discovered from Meta. Unlike `createAccount`, this fetches
+ * the canonical display name/number itself, so the operator only supplies ids.
+ */
+export async function connectMetaNumber({
+  organizationId,
+  accessToken = null,
+  wabaId,
+  phoneNumberId,
+  req = null,
+}) {
+  const { token, supplied, meta } = await resolveConnectionToken({
+    organizationId,
+    accessToken,
+  });
+  const waba = asString(wabaId, "wabaId", { required: true, max: 64 });
+  const metaPhoneNumberId = asString(phoneNumberId, "phoneNumberId", {
+    required: true,
+    max: 64,
+  });
+  const options = graphOptions(meta, token);
+
+  let wabaInfo;
+  let numberInfo;
+  try {
+    [wabaInfo, numberInfo] = await Promise.all([
+      getWaba(waba, options),
+      getPhoneNumberFromMeta(metaPhoneNumberId, options),
+    ]);
+  } catch (error) {
+    throw new ValidationError(`Meta could not connect that number: ${error.message}`);
+  }
+
+  const display = asString(numberInfo?.display_phone_number, "displayPhoneNumber", {
+    required: true,
+    max: 40,
+  });
+  const verifiedName = asString(numberInfo?.verified_name, "verifiedName", { max: 120 });
+  const accountName =
+    asString(wabaInfo?.name, "name", { max: 120 }) ||
+    verifiedName ||
+    `WhatsApp ${display}`;
+
+  const existingNumber = await prisma.whatsAppPhoneNumber.findUnique({
+    where: { phoneNumberId: metaPhoneNumberId },
+  });
+  if (existingNumber && existingNumber.organizationId !== organizationId) {
+    throw new ConflictError("That WhatsApp phone number id belongs to another organization");
+  }
+
+  const existingAccount = await prisma.whatsAppAccount.findFirst({
+    where: { organizationId, wabaId: waba },
+  });
+
+  const account = existingAccount
+    ? await prisma.whatsAppAccount.update({
+        where: { id: existingAccount.id },
+        data: { name: accountName, status: "ACTIVE" },
+      })
+    : await prisma.whatsAppAccount.create({
+        data: {
+          organizationId,
+          name: accountName,
+          wabaId: waba,
+          status: supplied || meta.accessToken ? "ACTIVE" : "PENDING",
+        },
+      });
+
+  const data = {
+    organizationId,
+    whatsappAccountId: account.id,
+    displayPhoneNumber: display,
+    verifiedName,
+    qualityRating: numberInfo?.quality_rating ?? null,
+    providerMode: PROVIDER_MODE.META,
+    status: normalizePhoneStatus(numberInfo?.status),
+  };
+
+  const phoneNumber = existingNumber
+    ? await prisma.whatsAppPhoneNumber.update({
+        where: { id: existingNumber.id },
+        data,
+        include: { whatsappAccount: true },
+      })
+    : await prisma.whatsAppPhoneNumber.create({
+        data: { ...data, phoneNumberId: metaPhoneNumberId },
+        include: { whatsappAccount: true },
+      });
+
+  // Keep one credential for the organization: the token pasted while connecting
+  // becomes the Settings token. Numbers fall back to it.
+  if (supplied) {
+    await updateCredentialSettings({
+      organizationId,
+      data: { meta: { accessToken: supplied } },
+      req,
+    });
+  }
+
+  await recordAudit({
+    organizationId,
+    action: existingNumber ? "whatsapp.account.reconnected" : "whatsapp.account.connected",
+    entityType: "WhatsAppPhoneNumber",
+    entityId: phoneNumber.id,
+    metadata: { phoneNumberId: metaPhoneNumberId, wabaId: waba },
+    req,
+  });
+
+  return serializePhoneNumber(phoneNumber);
+}
+
+/** Disconnect a number and remove its account once it has no numbers left. */
+export async function removePhoneNumber({ organizationId, id, req = null }) {
+  const record = await prisma.whatsAppPhoneNumber.findFirst({
+    where: { id, organizationId },
+  });
+  if (!record) throw new NotFoundError("WhatsApp phone number not found");
+
+  await prisma.whatsAppPhoneNumber.delete({ where: { id: record.id } });
+
+  const remaining = await prisma.whatsAppPhoneNumber.count({
+    where: { whatsappAccountId: record.whatsappAccountId },
+  });
+  if (remaining === 0) {
+    await prisma.whatsAppAccount.delete({ where: { id: record.whatsappAccountId } });
+  }
+
+  await recordAudit({
+    organizationId,
+    action: "whatsapp.number.removed",
+    entityType: "WhatsAppPhoneNumber",
+    entityId: record.id,
+    metadata: { phoneNumberId: record.phoneNumberId },
+    req,
+  });
+
+  return { id: record.id, deleted: true };
 }
 
 /**
@@ -283,52 +551,19 @@ export async function verifyPhoneNumber({ organizationId, id, req = null }) {
 }
 
 /**
- * Approved message templates for the account's WABA. Templates only exist on
- * Meta; simulator numbers return an empty list.
+ * Approved message templates for the account's WABA (legacy helper kept for
+ * the inbox/test pickers; template management uses `templates.listTemplates`).
  */
 export async function listApprovedTemplates({ organizationId, wabaId = null, phoneNumberId = null }) {
-  let account = null;
-
-  if (phoneNumberId) {
-    const number = await prisma.whatsAppPhoneNumber.findFirst({
-      where: {
-        organizationId,
-        OR: [{ id: phoneNumberId }, { phoneNumberId }],
-      },
-      include: { whatsappAccount: true },
-    });
-    if (!number) throw new NotFoundError("WhatsApp phone number not found");
-    account = number.whatsappAccount;
-  } else {
-    account = await prisma.whatsAppAccount.findFirst({
-      where: {
-        organizationId,
-        ...(wabaId ? { wabaId } : { wabaId: { not: null } }),
-      },
-      orderBy: { createdAt: "asc" },
-    });
-  }
-
-  if (!account?.wabaId) {
-    throw new ValidationError(
-      "Add a WABA id to this WhatsApp number before loading templates",
-    );
-  }
-
-  const token = await resolveAccessTokenForAccount(account);
-  if (!token) {
-    throw new ValidationError("No access token stored. Add one in Settings → API credentials.");
-  }
-
-  const meta = await getMetaConfig({ organizationId });
-  const response = await getTemplatesFromMeta(account.wabaId, {
-    accessToken: token,
-    baseUrl: meta.graphApiBaseUrl,
-    version: meta.graphApiVersion,
+  const context = await resolveMetaAccountContext({ organizationId, phoneNumberId, wabaId });
+  const response = await getTemplatesFromMeta(context.wabaId, {
+    ...context.requestOptions,
+    status: "approved",
+    limit: 100,
   });
 
   return {
-    wabaId: account.wabaId,
+    wabaId: context.wabaId,
     templates: (response?.data ?? [])
       .filter((template) => String(template.status ?? "").toUpperCase() === "APPROVED")
       .map((template) => ({

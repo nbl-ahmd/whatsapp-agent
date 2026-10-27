@@ -34,6 +34,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { WhatsAppSetup } from "@/components/whatsapp/WhatsAppSetup";
 
 /**
  * Settings: the organization, the people in it, the operator's own password,
@@ -357,7 +358,6 @@ export default function SettingsPage() {
   const organization = useResource("/api/organizations");
   const team = useResource("/api/organizations/users");
   const ai = useResource("/api/ai-agents");
-  const webhook = useResource("/api/whatsapp/webhook-status");
   const credentials = useResource("/api/settings");
 
   const [orgNameDraft, setOrgNameDraft] = useState(null);
@@ -445,17 +445,16 @@ export default function SettingsPage() {
       <Notice tone="ok">{notice}</Notice>
 
       {credentials.data ? (
-        <CredentialsCard
-          data={credentials.data}
+        <WhatsAppSetup
+          credentials={credentials.data}
           isAdmin={isAdmin}
           onSaved={() => {
             credentials.reload();
-            webhook.reload();
             ai.reload();
           }}
         />
       ) : (
-        <SectionCard title="API credentials" description="Loading stored configuration">
+        <SectionCard title="WhatsApp connection" description="Loading stored configuration">
           <div className="space-y-3">
             <Skeleton className="h-9 w-full" />
             <Skeleton className="h-9 w-full" />
@@ -463,6 +462,17 @@ export default function SettingsPage() {
           </div>
         </SectionCard>
       )}
+
+      {credentials.data ? (
+        <CredentialsCard
+          data={credentials.data}
+          isAdmin={isAdmin}
+          onSaved={() => {
+            credentials.reload();
+            ai.reload();
+          }}
+        />
+      ) : null}
 
       <ErrorAlert error={credentials.error} />
 

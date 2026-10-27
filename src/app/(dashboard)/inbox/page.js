@@ -924,6 +924,28 @@ function hasMedia(message) {
   );
 }
 
+function flowResponseEntries(message) {
+  const raw = message?.interactive?.nfm_reply?.response_json;
+  if (raw === undefined || raw === null || raw === "") return [];
+
+  let data = raw;
+  if (typeof raw === "string") {
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      return [{ key: "response", value: raw }];
+    }
+  }
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    return [{ key: "response", value: String(data) }];
+  }
+  return Object.entries(data).map(([key, value]) => ({
+    key,
+    value:
+      value && typeof value === "object" ? JSON.stringify(value) : String(value ?? ""),
+  }));
+}
+
 /**
  * Renders inbound media through the authenticated proxy (Meta media ids expire
  * and the bytes require the tenant's token). Outbound media already stores the
@@ -1017,6 +1039,8 @@ function MessageBubble({ message }) {
   const media = message.media ?? null;
   const mediaLink = typeof media?.link === "string" ? media.link : null;
   const caption = message.text ?? null;
+  const flowEntries = flowResponseEntries(message);
+  const templateName = message.template?.name ?? null;
 
   return (
     <div className={`flex items-end gap-2 ${outbound ? "justify-end" : "justify-start"}`}>
@@ -1037,9 +1061,29 @@ function MessageBubble({ message }) {
             <MessageMedia message={message} mediaLink={mediaLink} />
           ) : null}
 
+          {flowEntries.length > 0 ? (
+            <div className="space-y-1">
+              <p className="text-[11px] font-semibold uppercase tracking-wide opacity-70">
+                Flow response
+              </p>
+              <dl className="space-y-0.5">
+                {flowEntries.map((entry) => (
+                  <div key={entry.key} className="flex gap-2 text-xs">
+                    <dt className="min-w-20 shrink-0 opacity-70">{titleCase(entry.key)}</dt>
+                    <dd className="break-words font-medium">{entry.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          ) : null}
+
           {caption ? <p className="whitespace-pre-wrap">{caption}</p> : null}
 
-          {!caption && !mediaLink && !hasMedia(message) ? (
+          {templateName ? (
+            <p className="font-mono text-xs opacity-80">Template · {templateName}</p>
+          ) : null}
+
+          {!caption && !mediaLink && !hasMedia(message) && flowEntries.length === 0 && !templateName ? (
             <p className="opacity-80">[{message.type} message]</p>
           ) : null}
 

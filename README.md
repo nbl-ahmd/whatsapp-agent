@@ -146,6 +146,12 @@ No secret is ever prefixed with `NEXT_PUBLIC_`.
 | `POST` | `/api/webhooks/whatsapp` | Meta inbound events (idempotent) |
 | `POST` | `/api/whatsapp/messages` | Send text/image/document/template/interactive (session or `WHATSAPP_TEST_API_KEY`) |
 | `GET` | `/api/whatsapp/templates?phoneNumberId=…` | Approved templates for the number's WABA |
+| `POST` | `/api/whatsapp/meta/discover` | List the phone numbers under a WABA |
+| `POST` | `/api/whatsapp/meta/connect` | Connect a discovered Meta number |
+| `POST` | `/api/whatsapp/diagnostics` | Credential, WABA, template, subscription and handshake checks |
+| `POST` | `/api/whatsapp/webhook-test` | Verify the public webhook handshake |
+| `POST` | `/api/whatsapp/webhook/subscribe` | Subscribe the app to a WABA |
+| `POST` | `/api/whatsapp/test-inbound` | Inject an inbound event for a simulator number |
 | `GET` | `/api/whatsapp/media/:messageId` | Stream inbound media using the tenant's Meta token |
 | `GET` | `/api/integrations` | Connected CRM/ecommerce providers + provider catalog |
 | `POST` | `/api/integrations` | Connect a provider (admin; credentials encrypted) |
@@ -190,15 +196,21 @@ CI runs on every push to `main` and every pull request
 (`.github/workflows/ci.yml`): frontend lint + build, and backend tests against a
 PostgreSQL 16 service.
 
-## Meta webhook configuration
+## Meta test number + webhook
 
-In the Meta app → WhatsApp → Configuration:
+Full step-by-step guide: **[docs/WHATSAPP_SETUP.md](./docs/WHATSAPP_SETUP.md)**.
 
-- Callback URL: `https://api.yourdomain.com/api/webhooks/whatsapp`
-- Verify token: the value of `WHATSAPP_VERIFY_TOKEN`
-- Webhook field: `messages`
+Short version — in **Settings → WhatsApp**:
 
-Submit the URL from the backend (only the backend responds to the handshake).
+1. Save the Meta access token, app secret and a verify token in **API credentials**.
+2. Paste the WABA id, press **Find numbers**, then **Connect**.
+3. In Meta → WhatsApp → Configuration, set the callback URL to
+   `https://api.yourdomain.com/api/webhooks/whatsapp`, use the same verify token,
+   and subscribe to the `messages` field.
+4. Press **Subscribe app**, **Test handshake** and **Run diagnostics**.
+
+The webhook only works against the backend, never the Vercel frontend. Locally,
+expose port 4000 with a cloudflared/ngrok HTTPS tunnel.
 
 ## Database
 

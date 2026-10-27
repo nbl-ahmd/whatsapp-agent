@@ -1,17 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import {
   Check,
   CircleAlert,
   Copy,
-  KeyRound,
   Loader2,
   MessageCircle,
-  Plus,
   RefreshCw,
   Send,
-  ShieldCheck,
+  Settings,
   Webhook as WebhookIcon,
 } from "lucide-react";
 import { API_URL, api } from "@/lib/api";
@@ -25,7 +24,6 @@ import {
   StatusBadge,
 } from "@/components/ui";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -36,28 +34,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { FlowsPanel } from "@/components/whatsapp/FlowsPanel";
+import { TemplatesPanel } from "@/components/whatsapp/TemplatesPanel";
 
 /**
  * Connection management. Credentials are write-only from the browser: the API
  * reports whether a secret is stored and never returns its value. Simulator
  * numbers let the whole loop run without Meta credentials.
  */
-
-const EMPTY = {
-  id: null,
-  name: "",
-  wabaId: "",
-  phoneNumberId: "",
-  displayPhoneNumber: "",
-  verifiedName: "",
-  providerMode: "meta",
-  accessToken: "",
-  appSecret: "",
-  webhookVerifyToken: "",
-};
-
-const STATUS_TONE = { CONNECTED: "green", FLAGGED: "red", PENDING: "amber" };
 
 function SecretBadge({ label, ok }) {
   return (
@@ -69,16 +55,13 @@ function SecretBadge({ label, ok }) {
 
 export default function WhatsAppPage() {
   const numbers = useResource("/api/whatsapp/numbers");
-  const accounts = useResource("/api/whatsapp/accounts");
   const webhook = useResource("/api/whatsapp/webhook-status");
 
-  const [form, setForm] = useState(EMPTY);
-  const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
-  const [verifyResult, setVerifyResult] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [tab, setTab] = useState("connection");
 
   const [test, setTest] = useState({
     to: "",
@@ -92,13 +75,18 @@ export default function WhatsAppPage() {
     components: "",
   });
   const [testResult, setTestResult] = useState(null);
+  const [inbound, setInbound] = useState({
+    from: "15550001111",
+    text: "Hello from a simulated customer.",
+  });
+  const [inboundResult, setInboundResult] = useState(null);
   const [templates, setTemplates] = useState([]);
   const [templatesFor, setTemplatesFor] = useState(null);
   const [templatesPending, setTemplatesPending] = useState(false);
   const [templatesError, setTemplatesError] = useState(null);
 
   const list = numbers.data?.phoneNumbers ?? [];
-  const callbackUrl = `${API_URL}/api/webhooks/whatsapp`;
+  const callbackUrl = webhook.data?.callbackUrl ?? `${API_URL}/api/webhooks/whatsapp`;
   const numberId = test.numberId || list[0]?.id || "";
   const selectedNumber = list.find((row) => row.id === numberId) ?? null;
   const templatesLoaded =
@@ -128,92 +116,26 @@ export default function WhatsAppPage() {
 
   function refreshAll() {
     numbers.reload();
-    accounts.reload();
     webhook.reload();
   }
 
-  function startNew() {
-    setForm(EMPTY);
-    setOpen(true);
-    setError(null);
-    setNotice(null);
-    setVerifyResult(null);
+  function setManagementNumber(value) {
+    setTest((current) => ({ ...current, numberId: value }));
   }
 
-  function startEdit(number) {
-    setForm({
-      id: number.id,
-      name: number.account?.name ?? "",
-      wabaId: number.account?.wabaId ?? "",
-      phoneNumberId: number.phoneNumberId,
-      displayPhoneNumber: number.displayPhoneNumber,
-      verifiedName: number.verifiedName ?? "",
-      providerMode: number.providerMode,
-      accessToken: "",
-      appSecret: "",
-      webhookVerifyToken: "",
-    });
-    setOpen(true);
-    setError(null);
-    setNotice(null);
-    setVerifyResult(null);
-  }
-
-  async function submit(event) {
-    event.preventDefault();
-    setPending(true);
-    setError(null);
-    setNotice(null);
-
-    const secrets = {};
-    for (const key of ["accessToken", "appSecret", "webhookVerifyToken"]) {
-      if (form[key]) secrets[key] = form[key];
-    }
-
-    try {
-      if (form.id) {
-        await api.patch(`/api/whatsapp/numbers/${form.id}`, {
-          providerMode: form.providerMode,
-          displayPhoneNumber: form.displayPhoneNumber,
-          verifiedName: form.verifiedName || undefined,
-          phoneNumberId: form.phoneNumberId,
-          ...secrets,
-        });
-        setNotice("Connection updated.");
-      } else {
-        await api.post("/api/whatsapp/accounts", {
-          name: form.name || form.verifiedName || "WhatsApp account",
-          wabaId: form.wabaId || undefined,
-          phoneNumberId: form.phoneNumberId,
-          displayPhoneNumber: form.displayPhoneNumber,
-          verifiedName: form.verifiedName || undefined,
-          providerMode: form.providerMode,
-          ...secrets,
-        });
-        setNotice("Number connected. Verify it to ask Meta about the token.");
-        setForm(EMPTY);
-      }
-      refreshAll();
-    } catch (caught) {
-      setError(caught?.message ?? "Could not save the connection");
-    } finally {
-      setPending(false);
-    }
-  }
-
-  async function verify(number) {
-    setPending(true);
-    setError(null);
-    setVerifyResult(null);
-    try {
-      const result = await api.post(`/api/whatsapp/numbers/${number.id}/verify`);
-      setVerifyResult(result);
-      refreshAll();
-    } catch (caught) {
-      setError(caught?.message ?? "Verification failed");
-    } finally {
-      setPending(false);
-    }
+  function useTemplateInTest(template) {
+    setTest((current) => ({
+      ...current,
+      type: "template",
+      templateName: template.name,
+      templateLanguage: template.language,
+      components: "",
+      numberId: current.numberId || list[0]?.id || "",
+    }));
+    setTab("connection");
+    setNotice(
+      `Template "${template.name}" selected in the test sender. Pick a recipient and press Send.`,
+    );
   }
 
   async function sendTest(event) {
@@ -255,22 +177,49 @@ export default function WhatsAppPage() {
     }
   }
 
+  async function simulateInbound(event) {
+    event.preventDefault();
+    if (!selectedNumber) return;
+    setPending(true);
+    setError(null);
+    setNotice(null);
+    setInboundResult(null);
+    try {
+      const result = await api.post("/api/whatsapp/test-inbound", {
+        phoneNumberId: selectedNumber.id,
+        from: inbound.from,
+        text: inbound.text,
+      });
+      setInboundResult(result);
+      setNotice(
+        `Inbound event injected. Open the Inbox to see ${inbound.from} and any automation/AI reply.`,
+      );
+      numbers.reload();
+    } catch (caught) {
+      setError(caught?.message ?? "Could not simulate an inbound message");
+    } finally {
+      setPending(false);
+    }
+  }
+
   const anySimulator = list.some((number) => number.providerMode === "simulator");
 
   return (
     <div className="space-y-5">
       <PageHeader
         title="WhatsApp"
-        description="Paste Meta test credentials per number, or set shared app credentials in Settings → API credentials. Secrets are encrypted at rest and never returned to this page."
+        description="Operate the connected test number: send and receive messages, manage templates and Flows, and prove the pipeline end to end. Connection settings live in Settings."
         actions={
           <>
             <Button variant="outline" onClick={refreshAll}>
               <RefreshCw />
               Refresh
             </Button>
-            <Button onClick={startNew}>
-              <Plus />
-              Add number
+            <Button asChild>
+              <Link href="/settings">
+                <Settings />
+                Connection settings
+              </Link>
             </Button>
           </>
         }
@@ -287,7 +236,7 @@ export default function WhatsAppPage() {
         </div>
       ) : null}
 
-      <ErrorAlert error={error || accounts.error} />
+      <ErrorAlert error={error} />
 
       {notice ? (
         <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300">
@@ -296,36 +245,15 @@ export default function WhatsAppPage() {
         </div>
       ) : null}
 
-      {verifyResult ? (
-        <div
-          className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-sm ${
-            verifyResult.ok
-              ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300"
-              : "border-rose-200 bg-rose-50 text-rose-800 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300"
-          }`}
-        >
-          {verifyResult.ok ? (
-            <ShieldCheck className="mt-0.5 size-4 shrink-0" />
-          ) : (
-            <CircleAlert className="mt-0.5 size-4 shrink-0" />
-          )}
-          <p>
-            {verifyResult.ok ? (
-              <>
-                <span className="font-semibold">Verified.</span>{" "}
-                {verifyResult.message ??
-                  `Meta recognised ${verifyResult.number?.displayPhoneNumber}.`}
-              </>
-            ) : (
-              <>
-                <span className="font-semibold">Meta rejected the token.</span> {verifyResult.error}
-              </>
-            )}
-          </p>
-        </div>
-      ) : null}
+      <Tabs value={tab} onValueChange={setTab} className="gap-5">
+        <TabsList className="w-full sm:w-fit">
+          <TabsTrigger value="connection">Connection</TabsTrigger>
+          <TabsTrigger value="templates">Templates</TabsTrigger>
+          <TabsTrigger value="flows">Flows</TabsTrigger>
+        </TabsList>
 
-      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,1fr)]">
+        <TabsContent value="connection">
+          <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,1fr)]">
         <div className="space-y-5">
           <SectionCard
             title="Connected numbers"
@@ -340,11 +268,13 @@ export default function WhatsAppPage() {
               <EmptyState
                 icon={MessageCircle}
                 title="No number connected"
-                description="Add a number in simulator mode to test the loop, or paste a Meta phone number id and access token."
+                description="Find and connect your Meta test number in Settings → WhatsApp, or add a simulator number to test locally."
                 action={
-                  <Button size="sm" onClick={startNew}>
-                    <Plus />
-                    Add number
+                  <Button size="sm" asChild>
+                    <Link href="/settings">
+                      <Settings />
+                      Open connection settings
+                    </Link>
                   </Button>
                 }
               />
@@ -364,11 +294,8 @@ export default function WhatsAppPage() {
                         </p>
                       </div>
                       <div className="ml-auto flex items-center gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => startEdit(number)}>
-                          Edit
-                        </Button>
-                        <Button size="sm" disabled={pending} onClick={() => verify(number)}>
-                          Verify
+                        <Button variant="ghost" size="sm" asChild>
+                          <Link href="/settings">Manage</Link>
                         </Button>
                       </div>
                     </div>
@@ -377,12 +304,21 @@ export default function WhatsAppPage() {
                       <StatusBadge tone={number.providerMode === "simulator" ? "amber" : "indigo"}>
                         {number.providerMode}
                       </StatusBadge>
-                      <StatusBadge tone={STATUS_TONE[number.status] ?? "amber"}>
+                      <StatusBadge
+                        tone={
+                          number.status === "CONNECTED"
+                            ? "green"
+                            : number.status === "FLAGGED"
+                              ? "red"
+                              : "amber"
+                        }
+                      >
                         {titleCase(number.status)}
                       </StatusBadge>
-                      <SecretBadge label="token" ok={number.account?.hasAccessToken} />
-                      <SecretBadge label="app secret" ok={number.account?.hasAppSecret} />
-                      <SecretBadge label="verify token" ok={number.account?.hasVerifyToken} />
+                      <SecretBadge label="account token" ok={number.account?.hasAccessToken} />
+                      {number.account?.wabaId ? (
+                        <StatusBadge tone="zinc">WABA {number.account.wabaId}</StatusBadge>
+                      ) : null}
                       {number.account?.name ? (
                         <StatusBadge tone="zinc">{number.account.name}</StatusBadge>
                       ) : null}
@@ -393,143 +329,6 @@ export default function WhatsAppPage() {
             )}
           </SectionCard>
 
-          {open ? (
-            <SectionCard
-              title={form.id ? "Edit connection" : "Add a number"}
-              description="Secrets are write-only; leave a field blank to keep what is stored."
-              action={
-                <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
-                  Close
-                </Button>
-              }
-            >
-              <form className="space-y-4" onSubmit={submit}>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="wa-mode">Provider mode</Label>
-                    <Select
-                      value={form.providerMode}
-                      onValueChange={(value) => setForm({ ...form, providerMode: value })}
-                    >
-                      <SelectTrigger id="wa-mode" className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="meta">Meta Cloud API</SelectItem>
-                        <SelectItem value="simulator">Simulator (no Meta calls)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="wa-name">Account name</Label>
-                    <Input
-                      id="wa-name"
-                      value={form.name}
-                      onChange={(event) => setForm({ ...form, name: event.target.value })}
-                      placeholder="Acme support"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="wa-phone-number-id">Phone number id</Label>
-                    <Input
-                      id="wa-phone-number-id"
-                      value={form.phoneNumberId}
-                      onChange={(event) => setForm({ ...form, phoneNumberId: event.target.value })}
-                      placeholder="100000000000001"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="wa-display">Display number</Label>
-                    <Input
-                      id="wa-display"
-                      value={form.displayPhoneNumber}
-                      onChange={(event) =>
-                        setForm({ ...form, displayPhoneNumber: event.target.value })
-                      }
-                      placeholder="+1 555 010 0001"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="wa-verified">Verified name</Label>
-                    <Input
-                      id="wa-verified"
-                      value={form.verifiedName}
-                      onChange={(event) => setForm({ ...form, verifiedName: event.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="wa-waba">WABA id</Label>
-                    <Input
-                      id="wa-waba"
-                      value={form.wabaId}
-                      onChange={(event) => setForm({ ...form, wabaId: event.target.value })}
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 border-t pt-4 text-sm font-medium">
-                  <KeyRound className="size-4 text-muted-foreground" />
-                  Credentials
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="wa-token">Access token</Label>
-                  <Input
-                    id="wa-token"
-                    type="password"
-                    autoComplete="off"
-                    value={form.accessToken}
-                    onChange={(event) => setForm({ ...form, accessToken: event.target.value })}
-                    placeholder={form.id ? "•••••••• (unchanged)" : "EAAG…"}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    {form.id
-                      ? "Leave blank to keep the stored token. Paste a new one to replace it."
-                      : "Meta → WhatsApp → API setup. Stored encrypted; never shown again."}
-                  </p>
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="wa-secret">App secret</Label>
-                    <Input
-                      id="wa-secret"
-                      type="password"
-                      autoComplete="off"
-                      value={form.appSecret}
-                      onChange={(event) => setForm({ ...form, appSecret: event.target.value })}
-                    />
-                    <p className="text-xs text-muted-foreground">Used to verify webhook signatures.</p>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="wa-verify-token">Webhook verify token</Label>
-                    <Input
-                      id="wa-verify-token"
-                      type="password"
-                      autoComplete="off"
-                      value={form.webhookVerifyToken}
-                      onChange={(event) =>
-                        setForm({ ...form, webhookVerifyToken: event.target.value })
-                      }
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      An extra verify token accepted for this account. Settings → API credentials
-                      is usually enough.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex justify-end">
-                  <Button type="submit" disabled={pending}>
-                    {pending ? <Loader2 className="animate-spin" /> : null}
-                    {form.id ? "Save connection" : "Connect number"}
-                  </Button>
-                </div>
-              </form>
-            </SectionCard>
-          ) : null}
         </div>
 
         <div className="space-y-5">
@@ -834,8 +633,73 @@ export default function WhatsAppPage() {
               ) : null}
             </form>
           </SectionCard>
-        </div>
-      </div>
+
+          {selectedNumber?.providerMode === "simulator" ? (
+            <SectionCard
+              title="Simulate an inbound message"
+              description="Inject a Meta-shaped event into the real webhook pipeline. Simulator numbers only."
+            >
+              <form className="space-y-3" onSubmit={simulateInbound}>
+                <div className="space-y-1.5">
+                  <Label htmlFor="inbound-from">Customer phone</Label>
+                  <Input
+                    id="inbound-from"
+                    value={inbound.from}
+                    onChange={(event) => setInbound({ ...inbound, from: event.target.value })}
+                    placeholder="15550001111"
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Digits only, as Meta sends them. This creates a contact and conversation.
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="inbound-text">Message</Label>
+                  <Textarea
+                    id="inbound-text"
+                    value={inbound.text}
+                    onChange={(event) => setInbound({ ...inbound, text: event.target.value })}
+                    required
+                  />
+                </div>
+                <div className="flex justify-end">
+                  <Button type="submit" size="sm" disabled={pending}>
+                    {pending ? <Loader2 className="animate-spin" /> : null}
+                    Inject inbound
+                  </Button>
+                </div>
+                {inboundResult?.message ? (
+                  <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300">
+                    Stored message {inboundResult.message.id} in conversation{" "}
+                    {inboundResult.message.conversationId}. Check the Inbox.
+                  </p>
+                ) : null}
+              </form>
+            </SectionCard>
+          ) : null}
+          </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="templates">
+          <TemplatesPanel
+            numbers={list}
+            numberId={numberId}
+            onNumberChange={setManagementNumber}
+            onUseTemplate={useTemplateInTest}
+            onNotice={setNotice}
+          />
+        </TabsContent>
+
+        <TabsContent value="flows">
+          <FlowsPanel
+            numbers={list}
+            numberId={numberId}
+            onNumberChange={setManagementNumber}
+            onNotice={setNotice}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

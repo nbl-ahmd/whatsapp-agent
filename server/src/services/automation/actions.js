@@ -9,7 +9,12 @@ import {
   setConversationMode,
   setConversationVariables,
 } from "../conversations/service.js";
-import { sendTemplateMessage, sendTextMessage } from "../messages/outbound.js";
+import {
+  sendFlowMessage,
+  sendFlowTemplateMessage,
+  sendTemplateMessage,
+  sendTextMessage,
+} from "../messages/outbound.js";
 import { runAgentForConversation } from "../ai/agent.js";
 import { prisma } from "../../db/prisma.js";
 
@@ -168,12 +173,46 @@ export async function executeAction(action, context) {
       return { type: action.type, ok: Boolean(result.ok), ...result };
     }
 
-    case AUTOMATION_ACTION.SEND_FLOW:
-      return {
-        type: action.type,
-        ok: false,
-        error: "WhatsApp Flows are not implemented yet (Phase 6)",
-      };
+    case AUTOMATION_ACTION.SEND_FLOW: {
+      if (!conversation) return { type: action.type, ok: false, error: "no conversation in context" };
+
+      const templateName = action.templateName ?? action.template_name;
+      if (templateName) {
+        const { message } = await sendFlowTemplateMessage({
+          organizationId,
+          phoneNumberId: conversation.phoneNumberId,
+          to: contact.waId,
+          name: templateName,
+          language: action.language ?? "en_US",
+          flowToken: action.flowToken ?? "unused",
+          flowActionData: action.flowActionData ?? action.flow_action_data,
+        });
+        return {
+          type: action.type,
+          ok: true,
+          messageId: message.id,
+          template: templateName,
+          delivery: "template",
+        };
+      }
+
+      const { message } = await sendFlowMessage({
+        organizationId,
+        phoneNumberId: conversation.phoneNumberId,
+        to: contact.waId,
+        flowId: action.flowId,
+        flowName: action.flowName,
+        flowCta: action.flowCta ?? "Open",
+        flowToken: action.flowToken,
+        flowAction: action.flowAction ?? "navigate",
+        flowActionPayload: action.flowActionPayload,
+        mode: action.mode ?? "published",
+        headerText: action.headerText,
+        bodyText: action.bodyText,
+        footerText: action.footerText,
+      });
+      return { type: action.type, ok: true, messageId: message.id, delivery: "interactive" };
+    }
 
     default:
       logger.warn("Unknown automation action", { type: action.type });

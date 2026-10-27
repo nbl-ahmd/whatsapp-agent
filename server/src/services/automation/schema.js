@@ -14,7 +14,7 @@ const ACTION_TYPES = Object.values(AUTOMATION_ACTION);
 const ACTION_REQUIREMENTS = {
   [AUTOMATION_ACTION.SEND_MESSAGE]: ["text"],
   [AUTOMATION_ACTION.SEND_TEMPLATE]: ["name"],
-  [AUTOMATION_ACTION.SEND_FLOW]: ["flowId", "flowToken"],
+  [AUTOMATION_ACTION.SEND_FLOW]: ["flowToken"],
   [AUTOMATION_ACTION.ADD_TAG]: ["tag"],
   [AUTOMATION_ACTION.REMOVE_TAG]: ["tag"],
   [AUTOMATION_ACTION.SET_VARIABLE]: ["key", "value"],
@@ -118,6 +118,19 @@ export function validateActions(actions) {
       const seconds = Number(action.seconds);
       if (!Number.isFinite(seconds) || seconds < 1 || seconds > 3600) {
         throw new ValidationError(`actions[${index}].seconds must be between 1 and 3600`);
+      }
+    }
+
+    if (action.type === AUTOMATION_ACTION.SEND_FLOW) {
+      const hasInteractiveFlow = Boolean(action.flowId || action.flowName);
+      const templateName = action.templateName ?? action.template_name;
+      if (!hasInteractiveFlow && !templateName) {
+        throw new ValidationError(
+          `actions[${index}] needs flowId/flowName, or templateName for a test number`,
+        );
+      }
+      if (templateName && !String(templateName).trim()) {
+        throw new ValidationError(`actions[${index}].templateName cannot be empty`);
       }
     }
 

@@ -10,6 +10,7 @@ import {
   persistInboundMessage,
   updateMessageStatusByExternalId,
 } from "../messages/service.js";
+import { EVENT_TYPE } from "../../lib/constants.js";
 import { resolvePhoneNumberContext } from "../whatsapp/credentials.js";
 import { enqueueInboundEvent } from "../workers/index.js";
 import {
@@ -127,6 +128,7 @@ async function processChange({ phoneNumber, value }) {
 }
 
 function previewFor(normalized) {
+  if (normalized.flowResponse) return "Flow response received";
   if (normalized.text) return normalized.text;
   if (normalized.media?.caption) return normalized.media.caption;
   if (normalized.media?.filename) return normalized.media.filename;
@@ -178,16 +180,35 @@ export async function processInboundMessage({ phoneNumber, message, contacts }) 
   });
 
   // Webhooks must return fast: automations and AI run in the background queue.
-  await enqueueInboundEvent({
+  const baseEvent = {
     organizationId,
-    type: "MESSAGE_RECEIVED",
     conversationId: conversation.id,
     contactId: contact.id,
     messageId: persisted.id,
-    text: normalized.text,
     tags: contact.tags ?? [],
+  };
+
+  await enqueueInboundEvent({
+    ...baseEvent,
+    type: EVENT_TYPE.MESSAGE_RECEIVED,
+    text: normalized.text,
     conversationCreated: created,
   });
+
+  // A Flow completion is both a message and a lifecycle event. Workflows that
+  // listen for FLOW_COMPLETED can act on the submitted response_json.
+  if (normalized.flowResponse) {
+    await enqueueInboundEvent({
+      ...baseEvent,
+      type: EVENT_TYPE.FLOW_COMPLETED,
+      text:
+        normalized.flowResponse.data === null
+          ? null
+          : JSON.stringify(normalized.flowResponse.data),
+      conversationCreated: false,
+      flowResponse: normalized.flowResponse,
+    });
+  }
 
   return { message: persisted, conversation, contact, conversationCreated: created };
 }

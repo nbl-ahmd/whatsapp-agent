@@ -71,6 +71,33 @@ function extractText(message) {
 }
 
 /**
+ * A completed Flow arrives as `interactive.nfm_reply` with the submitted values
+ * serialized in `response_json`. Parse it once here so the inbox and automation
+ * engine do not each have to know Meta's envelope.
+ */
+export function extractFlowResponse(message) {
+  const reply = message?.interactive?.nfm_reply;
+  if (!reply) return null;
+
+  let data = null;
+  if (typeof reply.response_json === "string") {
+    try {
+      data = JSON.parse(reply.response_json);
+    } catch {
+      data = { raw: reply.response_json };
+    }
+  } else if (reply.response_json && typeof reply.response_json === "object") {
+    data = reply.response_json;
+  }
+
+  return {
+    name: reply.name ?? "flow",
+    body: reply.body ?? null,
+    data,
+  };
+}
+
+/**
  * Flatten a webhook payload into message changes carrying the phone number id
  * used for tenant resolution.
  */
@@ -99,6 +126,7 @@ export function deriveEventType(payload) {
 
 export function normalizeInboundMessage({ organizationId, phoneNumberId, message, contacts }) {
   const profile = contacts?.find((contact) => contact.wa_id === message.from) ?? contacts?.[0];
+  const flowResponse = extractFlowResponse(message);
 
   return {
     kind: "message",
@@ -108,10 +136,11 @@ export function normalizeInboundMessage({ organizationId, phoneNumberId, message
     externalMessageId: message.id,
     waId: message.from,
     profileName: profile?.profile?.name ?? null,
-    type: mapMessageType(message.type),
+    type: flowResponse ? MESSAGE_TYPE.FLOW : mapMessageType(message.type),
     text: extractText(message),
     media: extractMedia(message),
     interactive: message.interactive ?? null,
+    flowResponse,
     location: message.location ?? null,
     context: message.context ?? null,
     timestamp: toDate(message.timestamp),
